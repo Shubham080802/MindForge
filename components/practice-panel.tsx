@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { DEMO_MODE } from "@/lib/config";
 import { request } from "@/lib/api";
 
 const DEMO_QUESTIONS = [
@@ -17,8 +18,6 @@ type EvaluationResult = {
   correctPoints: string[];
   missingPoints: string[];
 };
-
-const DEMO_MODE = true;
 
 export function PracticePanel({ subjectId }: { subjectId: string }) {
   const [questions, setQuestions] = useState<string[]>([]);

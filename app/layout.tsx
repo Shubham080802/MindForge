@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://mindforge.vercel.app"),
   title: {
     default: "MindForge — Your notes, made easier to return to",
     template: "%s | MindForge",

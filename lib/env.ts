@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEMO_MODE } from "@/lib/config";
 
 const serverSchema = z.object({
   APP_ORIGIN: z.string().url(),
@@ -16,7 +17,9 @@ const serverSchema = z.object({
   RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().max(3_600),
 });
 
-export const env = serverSchema.parse({
+type Env = z.infer<typeof serverSchema>;
+
+const raw = {
   APP_ORIGIN: process.env.APP_ORIGIN,
   NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
   NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
@@ -30,4 +33,22 @@ export const env = serverSchema.parse({
   MAX_UPLOAD_BYTES: process.env.MAX_UPLOAD_BYTES,
   RATE_LIMIT_REQUESTS: process.env.RATE_LIMIT_REQUESTS,
   RATE_LIMIT_WINDOW_SECONDS: process.env.RATE_LIMIT_WINDOW_SECONDS,
-});
+};
+
+const demoEnv: Env = {
+  APP_ORIGIN: "http://localhost:3000",
+  NEXT_PUBLIC_SUPABASE_URL: "https://demo.supabase.co",
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: "demo",
+  SUPABASE_OAUTH_PROVIDER: "github",
+  OPENAI_API_KEY: "demo",
+  AI_MODEL: "demo",
+  EMBEDDING_MODEL: "demo",
+  EMBEDDING_DIMENSIONS: 1536,
+  UPSTASH_REDIS_REST_URL: "https://demo.upstash.io",
+  UPSTASH_REDIS_REST_TOKEN: "demo",
+  MAX_UPLOAD_BYTES: 10_000_000,
+  RATE_LIMIT_REQUESTS: 100,
+  RATE_LIMIT_WINDOW_SECONDS: 60,
+};
+
+export const env = DEMO_MODE ? demoEnv : serverSchema.parse(raw);

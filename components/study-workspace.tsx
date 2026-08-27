@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { PracticePanel } from "@/components/practice-panel";
+import { request } from "@/lib/api";
 
 type Subject = { id: string; name: string; description: string | null; created_at: string };
 type Material = {
@@ -21,15 +22,6 @@ type EvaluationResult = {
   correctPoints: string[];
   missingPoints: string[];
 };
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json() as Promise<T>;
-}
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -281,7 +273,8 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
         await new Promise((r) => setTimeout(r, 800 + Math.random() * 800));
         const response = images.length
           ? "I can see the image you've shared. Based on what's shown, here's my analysis:\n\nThe content appears to be related to your study materials. Let me break it down into key points and connect it to the concepts you've been learning.\n\n**Observation:** The visual shows structured information that aligns with your notes.\n\n**Key takeaway:** Focus on the relationships between the elements rather than memorizing individual parts.\n\nWould you like me to explain any specific part in more detail?"
-          : DEMO_RESPONSES[Math.floor(Math.random() * DEMO_RESPONSES.length)];
+          : (DEMO_RESPONSES[Math.floor(Math.random() * DEMO_RESPONSES.length)] ??
+            "Here's a thoughtful answer based on your study materials. Let me know if you'd like me to go deeper on any part.");
         setMessages((current) => [...current, { role: "assistant", content: response }]);
         setBusy(false);
         return;
@@ -316,16 +309,25 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
     for (const file of Array.from(files)) {
       if (!file.type.startsWith("image/")) continue;
       readers.push(
-        new Promise((resolve) => {
+        new Promise<string>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
+          reader.onload = () => {
+            const result = reader.result;
+            if (typeof result === "string") resolve(result);
+            else reject(new Error("Failed to read image as data URL"));
+          };
+          reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
           reader.readAsDataURL(file);
         })
       );
     }
-    Promise.all(readers).then((dataUrls) => {
-      setPendingImages((current) => [...current, ...dataUrls]);
-    });
+    Promise.all(readers)
+      .then((dataUrls) => {
+        setPendingImages((current) => [...current, ...dataUrls]);
+      })
+      .catch(() => {
+        showToast("Could not read one or more images.", "error");
+      });
     event.target.value = "";
   }
 
@@ -700,10 +702,10 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
                   rows={2}
                   disabled={busy}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                      e.preventDefault();
-                      (e.target as HTMLTextAreaElement).form?.requestSubmit();
-                    }
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault();
+                        e.currentTarget.form?.requestSubmit();
+                      }
                   }}
                 />
                 <button type="submit" disabled={busy || !selectedId} className="btn btn-primary">

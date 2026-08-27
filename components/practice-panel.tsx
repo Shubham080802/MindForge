@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { request } from "@/lib/api";
 
 const DEMO_QUESTIONS = [
   "Explain the difference between supervised and unsupervised learning in your own words.",
@@ -16,15 +17,6 @@ type EvaluationResult = {
   correctPoints: string[];
   missingPoints: string[];
 };
-
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
-  if (!response.ok) throw new Error(await response.text());
-  return response.json() as Promise<T>;
-}
 
 const DEMO_MODE = true;
 

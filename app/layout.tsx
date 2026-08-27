@@ -21,7 +21,7 @@ export const metadata: Metadata = {
     description: "Private AI-powered study workspace. Upload notes, ask questions, generate practice quizzes.",
     images: [
       {
-        url: "/og-image.png",
+        url: "/og-image.svg",
         width: 1200,
         height: 630,
         alt: "MindForge workspace preview",
@@ -32,7 +32,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "MindForge — Your notes, made easier to return to",
     description: "Private AI-powered study workspace. Upload notes, ask questions, generate practice quizzes.",
-    images: ["/og-image.png"],
+    images: ["/og-image.svg"],
   },
   icons: {
     icon: "/favicon.svg",

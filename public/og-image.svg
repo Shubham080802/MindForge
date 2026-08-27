@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#ffffff" />
+  <rect x="80" y="80" width="120" height="120" rx="28" fill="#5b5bd6" />
+  <path d="M104 140L130 166L196 100" stroke="#ffffff" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+  <text x="240" y="168" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="64" font-weight="700" fill="#18181b">MindForge</text>
+  <text x="80" y="320" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="52" font-weight="700" fill="#18181b">Your private AI study workspace</text>
+  <text x="80" y="392" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="34" fill="#71717a">Upload notes · Ask questions · Generate practice quizzes</text>
+  <text x="80" y="560" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="30" fill="#a1a1aa">mindforge.vercel.app</text>
+</svg>

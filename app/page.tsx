@@ -35,7 +35,7 @@ export default async function Home() {
               </h1>
 
               <p className="hero-description">
-                Bring in the lecture notes you actually have. Ask when something doesn't land,
+                Bring in the lecture notes you actually have. Ask when something doesn&apos;t land,
                 practise what you know, and hear a clearer explanation when you need one.
               </p>
 
@@ -173,7 +173,7 @@ export default async function Home() {
                 <span className="step-number" aria-hidden="true">02</span>
                 <div className="step-content">
                   <h3 className="step-title">Upload Materials</h3>
-                  <p className="step-description">Drag and drop PDFs, DOCX, Markdown, or text files. They're processed, indexed, and ready for grounded Q&A within seconds.</p>
+                  <p className="step-description">Drag and drop PDFs, DOCX, Markdown, or text files. They&apos;re processed, indexed, and ready for grounded Q&A within seconds.</p>
                 </div>
               </li>
               <li className="workflow-step">
@@ -244,7 +244,7 @@ export default async function Home() {
             </nav>
           </div>
           <div className="footer-bottom">
-            <p className="copyright">© {new Date().getFullYear()} MindForge. All rights reserved.</p>
+            <p className="copyright" suppressHydrationWarning>© {new Date().getFullYear()} MindForge. All rights reserved.</p>
           </div>
         </div>
       </footer>

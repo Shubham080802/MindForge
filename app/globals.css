@@ -1712,3 +1712,26 @@ img, svg {
   justify-content: flex-end;
   gap: 12px;
 }
+
+/* Error boundary */
+.error-boundary {
+  margin: 32px auto;
+  max-width: 560px;
+  padding: 32px;
+  text-align: center;
+  background: var(--card);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius-lg);
+}
+
+.error-boundary h2 {
+  margin: 0 0 12px;
+  color: var(--danger);
+}
+
+.error-message {
+  margin: 0 0 20px;
+  font-size: 14px;
+  color: var(--fg-muted);
+  word-break: break-word;
+}

@@ -1,4 +1,5 @@
 import { StudyWorkspace } from "@/components/study-workspace";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 export const dynamic = "force-dynamic";
 
@@ -31,7 +32,9 @@ export default function DashboardPage() {
       </header>
 
       <main id="main-content" className="workspace-main" role="main">
-        <StudyWorkspace initialSubjects={mockSubjects} />
+        <ErrorBoundary>
+          <StudyWorkspace initialSubjects={mockSubjects} />
+        </ErrorBoundary>
       </main>
 
       <div id="toast-container" className="toast-container" role="region" aria-live="polite" aria-label="Notifications"></div>

@@ -842,6 +842,13 @@ img, svg {
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  gap: 8px;
+}
+
+.subject-select {
+  display: flex;
+  align-items: center;
+  width: 100%;
   padding: 12px 14px;
   border-radius: var(--radius-md);
   background: transparent;
@@ -852,12 +859,12 @@ img, svg {
   gap: 12px;
 }
 
-.subject-item:hover {
+.subject-select:hover {
   background: var(--bg-hover);
   border-color: var(--border);
 }
 
-.subject-item.active {
+.subject-select.active {
   background: var(--accent-soft);
   border-color: var(--accent);
 }
@@ -1668,4 +1675,40 @@ img, svg {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Confirm modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(24, 24, 27, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  box-shadow: var(--shadow-lg);
+}
+
+.modal-message {
+  margin: 0 0 20px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
 }

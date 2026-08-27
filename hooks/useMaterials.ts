@@ -20,7 +20,7 @@ const DEMO_MATERIALS: Record<string, Material[]> = {
   ],
 };
 
-export function useMaterials(selectedId: string | undefined) {
+export function useMaterials(selectedId: string | undefined, confirm: (message: string) => Promise<boolean>) {
   const [materials, setMaterials] = useState<Material[]>([]);
   const [busy, setBusy] = useState(false);
 
@@ -67,7 +67,7 @@ export function useMaterials(selectedId: string | undefined) {
   }
 
   async function deleteMaterial(materialId: string) {
-    if (!confirm("Remove this study material?")) return;
+    if (!(await confirm("Remove this study material?"))) return;
     setBusy(true);
     try {
       await request(`/api/materials/${materialId}`, { method: "DELETE" });

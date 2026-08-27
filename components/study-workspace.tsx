@@ -5,6 +5,7 @@ import { PracticePanel } from "@/components/practice-panel";
 import { useSubjects } from "@/hooks/useSubjects";
 import { useMaterials } from "@/hooks/useMaterials";
 import { useChat } from "@/hooks/useChat";
+import { useConfirm } from "@/hooks/useConfirm";
 import type { Subject } from "@/lib/types";
 
 function formatBytes(bytes: number): string {
@@ -14,9 +15,10 @@ function formatBytes(bytes: number): string {
 }
 
 export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[] }) {
+  const { confirm, dialog } = useConfirm();
   const { subjects, selectedId, setSelectedId, selected, busy: subjectsBusy, createSubject, deleteSubjectById } =
-    useSubjects(initialSubjects);
-  const { materials, busy: materialsBusy, uploadMaterial, deleteMaterial } = useMaterials(selectedId);
+    useSubjects(initialSubjects, confirm);
+  const { materials, busy: materialsBusy, uploadMaterial, deleteMaterial } = useMaterials(selectedId, confirm);
   const {
     messages,
     pendingImages,
@@ -90,9 +92,10 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
               </li>
             ) : (
               subjects.map((sub) => (
-                <li key={sub.id}>
+                <li key={sub.id} className="subject-item">
                   <button
-                    className={`subject-item ${sub.id === selectedId ? "active" : ""}`}
+                    type="button"
+                    className={`subject-select ${sub.id === selectedId ? "active" : ""}`}
                     onClick={() => setSelectedId(sub.id)}
                     aria-current={sub.id === selectedId ? "true" : "false"}
                   >
@@ -100,17 +103,17 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
                       <span className="subject-name">{sub.name}</span>
                       {sub.description && <span className="subject-desc">{sub.description}</span>}
                     </div>
-                    <button
-                      type="button"
-                      className="subject-delete"
-                      onClick={(e) => { e.stopPropagation(); deleteSubjectById(sub.id); }}
-                      aria-label={`Delete ${sub.name}`}
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6" />
-                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                      </svg>
-                    </button>
+                  </button>
+                  <button
+                    type="button"
+                    className="subject-delete"
+                    onClick={(e) => { e.stopPropagation(); deleteSubjectById(sub.id); }}
+                    aria-label={`Delete ${sub.name}`}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="3 6 5 6 21 6" />
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                    </svg>
                   </button>
                 </li>
               ))
@@ -234,7 +237,7 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
               ) : (
                 <div className="messages-list" role="log" aria-live="polite" aria-label="Conversation">
                   {messages.map((msg, idx) => (
-                    <article key={idx} className={`message message-${msg.role}`}>
+                    <article key={msg.id ?? idx} className={`message message-${msg.role}`}>
                       <header className="message-header">
                         <strong>{msg.role === "user" ? "You" : "Study Partner"}</strong>
                         {msg.role === "assistant" && (
@@ -357,6 +360,7 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
           <PracticePanel subjectId={selectedId} />
         </aside>
       </div>
+      {dialog}
     </div>
   );
 }

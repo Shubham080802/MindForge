@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { DEMO_MODE } from "@/lib/config";
 import { request } from "@/lib/api";
+import { showToast } from "@/lib/toast";
 
 const DEMO_QUESTIONS = [
   "Explain the difference between supervised and unsupervised learning in your own words.",
@@ -45,7 +46,7 @@ export function PracticePanel({ subjectId }: { subjectId: string }) {
         setUserAnswers({});
       }
     } catch {
-      alert("Please add and process study materials before generating questions.");
+      showToast("Please add and process study materials before generating questions.", "error");
     } finally {
       setBusy(false);
     }
@@ -77,7 +78,7 @@ export function PracticePanel({ subjectId }: { subjectId: string }) {
         setEvaluations((current) => ({ ...current, [idx]: res.evaluation }));
       }
     } catch {
-      alert("Could not evaluate answer. Please try again.");
+      showToast("Could not evaluate answer. Please try again.", "error");
     } finally {
       setEvaluatingIdx(null);
     }

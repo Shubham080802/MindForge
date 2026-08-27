@@ -6,7 +6,7 @@ import { request } from "@/lib/api";
 import { showToast } from "@/lib/toast";
 import type { Subject } from "@/lib/types";
 
-export function useSubjects(initialSubjects: Subject[]) {
+export function useSubjects(initialSubjects: Subject[], confirm: (message: string) => Promise<boolean>) {
   const [subjects, setSubjects] = useState(initialSubjects);
   const [selectedId, setSelectedId] = useState(initialSubjects[0]?.id ?? "");
   const [busy, setBusy] = useState(false);
@@ -50,7 +50,7 @@ export function useSubjects(initialSubjects: Subject[]) {
   async function deleteSubjectById(id: string) {
     const sub = subjects.find((s) => s.id === id);
     if (!sub) return;
-    if (!confirm(`Are you sure you want to delete "${sub.name}" and all its study materials?`)) return;
+    if (!(await confirm(`Are you sure you want to delete "${sub.name}" and all its study materials?`))) return;
 
     if (DEMO_MODE) {
       const updated = subjects.filter((s) => s.id !== id);

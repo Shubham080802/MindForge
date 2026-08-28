@@ -73,22 +73,13 @@
   .text-balance {
     text-wrap: balance;
   }
-  .container {
-    width: 100%;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 0 24px;
-  }
-  @media (min-width: 1400px) {
-    .container { max-width: 1320px; }
-  }
   .skip-link {
     position: absolute;
     top: -100%;
     left: 24px;
     padding: 12px 20px;
-    background: var(--primary);
-    color: var(--primary-foreground);
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
     border-radius: var(--radius);
     font-weight: 600;
     z-index: 10000;

@@ -15,6 +15,9 @@ export default function HomePage() {
             <Link href="/auth/signin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Sign In
             </Link>
+            <Link href="/auth/signup" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Sign Up
+            </Link>
           </nav>
         </div>
       </header>

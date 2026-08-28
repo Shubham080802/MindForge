@@ -7,13 +7,13 @@ export default defineConfig({
   fullyParallel: false,
   retries: 0,
   use: {
-    baseURL: "http://localhost:3100",
+    baseURL: "http://localhost:3003",
     headless: true,
     trace: "on-first-retry",
   },
   webServer: {
-    command: "pnpm dev --port 3100",
-    url: "http://localhost:3100",
+    command: "pnpm dev --port 3003",
+    url: "http://localhost:3003",
     reuseExistingServer: true,
     timeout: 120_000,
   },

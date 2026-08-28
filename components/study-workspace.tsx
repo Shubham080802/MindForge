@@ -45,7 +45,7 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
       `*Generated on ${new Date().toLocaleDateString()} by MindForge Study Agent*`,
       `\n---\n`,
       ...messages.map(
-        (m) => `### ${m.role === "user" ? "🙋 Learner Question" : "🤖 Tutor Response"}\n\n${m.content}\n`
+        (m) => `### ${m.role === "user" ? "Learner Question" : "🤖 Tutor Response"}\n\n${m.content}\n`
       ),
     ].join("\n\n");
 

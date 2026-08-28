@@ -15,12 +15,6 @@ export default function HomePage() {
             <Link href="/auth/signin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Sign In
             </Link>
-            <Link
-              href="/auth/signin"
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
-            >
-              Get Started
-            </Link>
           </nav>
         </div>
       </header>
@@ -51,7 +45,7 @@ export default function HomePage() {
                   href="/auth/signin"
                   className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-11 rounded-md px-8 gap-2"
                 >
-                  Start Free
+                  Get Started
                   <ArrowRight className="h-4 w-4" />
                 </Link>
                 <Link
@@ -61,7 +55,6 @@ export default function HomePage() {
                   Watch Demo
                 </Link>
               </div>
-              <p className="mt-6 text-sm text-muted-foreground">No credit card required &middot; Free tier available</p>
             </div>
           </div>
         </section>
@@ -129,13 +122,13 @@ export default function HomePage() {
                 Join thousands of students and professionals using MindForge to master complex topics faster.
               </p>
               <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
-                <a
+                <Link
                   href="/auth/signin"
                   className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground hover:bg-primary/90 h-11 rounded-md px-8 gap-2"
                 >
-                  Start Free Trial
+                  Get Started
                   <ArrowRight className="h-4 w-4" />
-                </a>
+                </Link>
                 <Link
                   href="/auth/signin"
                   className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-11 rounded-md px-8"

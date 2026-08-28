@@ -91,15 +91,6 @@ export default function SignUpForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="text-center mb-8">
-        <Link href="/" className="inline-flex items-center gap-2 font-semibold text-2xl mb-6">
-          <span className="text-primary">Mind</span>
-          <span className="text-foreground">Forge</span>
-        </Link>
-        <h1 className="text-2xl font-bold">Create your account</h1>
-        <p className="mt-2 text-muted-foreground">Start your AI-powered study journey</p>
-      </div>
-
       <div className="rounded-xl border bg-card text-card-foreground shadow-sm w-full">
         <div className="flex flex-col space-y-1.5 p-6 text-center">
           <h3 className="text-2xl font-semibold leading-none tracking-tight">Sign up</h3>

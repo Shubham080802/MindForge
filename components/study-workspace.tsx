@@ -6,6 +6,7 @@ import { useSubjects } from "@/hooks/useSubjects";
 import { useMaterials } from "@/hooks/useMaterials";
 import { useChat } from "@/hooks/useChat";
 import { useConfirm } from "@/hooks/useConfirm";
+import { showToast } from "@/lib/toast";
 import type { Subject } from "@/lib/types";
 
 function formatBytes(bytes: number): string {
@@ -33,6 +34,33 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
   const [showMaterialsList, setShowMaterialsList] = useState(false);
 
   const busy = subjectsBusy || materialsBusy || chatBusy;
+
+  function exportChatHistory() {
+    if (!messages || messages.length === 0) {
+      showToast("No study conversation messages to export yet.", "info");
+      return;
+    }
+    const markdownContent = [
+      `# Study Notes: ${selected?.name ?? "Subject"}`,
+      `*Generated on ${new Date().toLocaleDateString()} by MindForge Study Agent*`,
+      `\n---\n`,
+      ...messages.map(
+        (m) => `### ${m.role === "user" ? "🙋 Learner Question" : "🤖 Tutor Response"}\n\n${m.content}\n`
+      ),
+    ].join("\n\n");
+
+    const blob = new Blob([markdownContent], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    const filename = `${(selected?.name ?? "study-notes").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-notes.md`;
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showToast(`Exported study conversation to ${filename}`, "success");
+  }
 
   return (
     <div className="workspace-content" role="region" aria-label="Study workspace">
@@ -131,6 +159,19 @@ export function StudyWorkspace({ initialSubjects }: { initialSubjects: Subject[]
                   <h1 className="subject-title">{selected.name}</h1>
                 </div>
                 <div className="subject-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={exportChatHistory}
+                    title="Export study conversation as Markdown file"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                    <span>Export Notes</span>
+                  </button>
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm"

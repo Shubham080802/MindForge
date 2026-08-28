@@ -189,9 +189,9 @@ export default function HomePage() {
             </div>
           </div>
           <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t pt-8">
-            <p className="text-sm text-muted-foreground">
-              &copy; {new Date().getFullYear()} MindForge. All rights reserved.
-            </p>
+<p className="text-sm text-muted-foreground">
+                &copy; 2026 MindForge. All rights reserved.
+              </p>
             <div className="flex items-center gap-4">
               <a href="#" className="text-muted-foreground hover:text-foreground transition-colors" aria-label="Twitter">
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z"/></svg>

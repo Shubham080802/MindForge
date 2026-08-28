@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Eye, EyeOff, Loader2, Mail, Lock, User, Github, Chrome } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, Github } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const signInSchema = z.object({
@@ -70,15 +70,6 @@ export default function SignInForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="text-center mb-8">
-        <Link href="/" className="inline-flex items-center gap-2 font-semibold text-2xl mb-6">
-          <span className="text-primary">Mind</span>
-          <span className="text-foreground">Forge</span>
-        </Link>
-        <h1 className="text-2xl font-bold">Welcome back</h1>
-        <p className="mt-2 text-muted-foreground">Sign in to continue to MindForge</p>
-      </div>
-
       <Card className="w-full">
         <CardHeader className="text-center">
           <CardTitle>Sign in to your account</CardTitle>

@@ -5,12 +5,13 @@ export default auth((req) => {
   const isOnAuth = req.nextUrl.pathname.startsWith("/auth");
   const isOnWorkspace = req.nextUrl.pathname.startsWith("/workspace");
   const isOnApi = req.nextUrl.pathname.startsWith("/api");
+  const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
 
   if (isOnAuth && isLoggedIn) {
     return Response.redirect(new URL("/workspace", req.nextUrl));
   }
 
-  if ((isOnWorkspace || isOnApi) && !isLoggedIn) {
+  if ((isOnWorkspace || (isOnApi && !isAuthApi)) && !isLoggedIn) {
     const callbackUrl = encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search);
     return Response.redirect(new URL(`/auth/signin?callbackUrl=${callbackUrl}`, req.nextUrl));
   }

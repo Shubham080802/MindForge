@@ -6,3 +6,8 @@ node_modules/
 !.env.example
 coverage/
 *.log
+
+# Playwright
+/test-results
+/playwright-report
+/playwright/.cache

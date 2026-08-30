@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 
+export const runtime = "nodejs";
+
 const signupSchema = z.object({
   name: z.string().min(2),
   email: z.string().email(),

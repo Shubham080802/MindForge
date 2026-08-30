@@ -24,7 +24,7 @@ const DialogOverlay = React.forwardRef<
     )}
     {...props}
   />
-);
+));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
@@ -63,7 +63,6 @@ const DialogHeader = ({
     {...props}
   />
 );
-DialogHeader.displayName = DialogPrimitive.Header.displayName;
 
 const DialogFooter = ({
   className,
@@ -77,7 +76,6 @@ const DialogFooter = ({
     {...props}
   />
 );
-DialogFooter.displayName = DialogPrimitive.Footer.displayName;
 
 const DialogTitle = React.forwardRef<
   HTMLHeadingElement,
@@ -91,7 +89,7 @@ const DialogTitle = React.forwardRef<
     )}
     {...props}
   />
-);
+));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
 
 const DialogDescription = React.forwardRef<
@@ -103,7 +101,7 @@ const DialogDescription = React.forwardRef<
     className={cn("text-sm text-muted-foreground", className)}
     {...props}
   />
-);
+));
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
 export {

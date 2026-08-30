@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BookOpen, Mic, Zap, Shield, ArrowRightLeft } from "lucide-react";
+import { ArrowRight, BookOpen, Mic, Zap, Shield, ArrowRightLeft, Info } from "lucide-react";
 
 export default function HomePage() {
   return (
@@ -12,6 +12,10 @@ export default function HomePage() {
             <span className="text-foreground">Forge</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
+            <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5">
+              <Info className="h-4 w-4" />
+              About
+            </Link>
             <Link href="/auth/signin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Sign In
             </Link>

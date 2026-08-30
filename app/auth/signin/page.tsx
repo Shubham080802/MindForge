@@ -6,8 +6,8 @@ import SignInForm from "./signin-form";
 export default function SignInPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4 py-12">
-      <Link href="/" className="fixed top-6 left-6 z-10 inline-flex items-center justify-center w-8 h-8 rounded-lg bg-background border border-border text-foreground hover:bg-muted transition-colors" aria-label="Back to home">
-        <ArrowLeft className="w-4 h-4" />
+      <Link href="/" className="fixed top-6 left-6 z-10 inline-flex items-center justify-center w-12 h-12 rounded-lg bg-background border border-border text-foreground hover:bg-muted transition-colors" aria-label="Back to home">
+        <ArrowLeft className="w-6 h-6" />
       </Link>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">

@@ -71,18 +71,7 @@ export default function SignInForm() {
   return (
     <div className="w-full max-w-md">
       <Card className="w-full">
-        <CardHeader className="text-center relative">
-          <Link
-            href="/"
-            className="absolute left-0 top-0 flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Go back to home"
-          >
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-            <span>Back</span>
-          </Link>
+        <CardHeader className="text-center">
           <CardTitle>Sign in to your account</CardTitle>
           <CardDescription>Enter your credentials to access your workspace</CardDescription>
         </CardHeader>

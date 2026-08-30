@@ -91,18 +91,7 @@ export default function SignUpForm() {
 
   return (
     <div className="w-full max-w-md">
-      <div className="rounded-xl border bg-card text-card-foreground shadow-sm w-full relative">
-        <Link
-          href="/"
-          className="absolute left-0 top-0 flex items-center gap-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Go back to home"
-        >
-          <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M19 12H5" />
-            <path d="M12 19l-7-7 7-7" />
-          </svg>
-          <span>Back</span>
-        </Link>
+      <div className="rounded-xl border bg-card text-card-foreground shadow-sm w-full">
         <div className="flex flex-col space-y-1.5 p-6 text-center">
           <h3 className="text-2xl font-semibold leading-none tracking-tight">Sign up</h3>
           <p className="text-sm text-muted-foreground">Enter your details to create an account</p>

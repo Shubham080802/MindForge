@@ -7,7 +7,7 @@ export default auth((req) => {
   const isOnWorkspace = req.nextUrl.pathname.startsWith("/workspace");
   const isOnApi = req.nextUrl.pathname.startsWith("/api");
   const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
-  const isAuthPage = ["/auth/signin", "/auth/signup", "/auth/forgot-password", "/auth/reset-password"].includes(req.nextUrl.pathname);
+  const isAuthPage = ["/auth/signin", "/auth/signup", "/auth/forgot-password", "/auth/reset-password", "/auth/verify-request"].includes(req.nextUrl.pathname);
 
   // Allow access to auth pages even if logged in
   if (isAuthPage && isLoggedIn) {

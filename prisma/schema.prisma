@@ -81,3 +81,13 @@ model PasswordResetToken {
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+model EmailVerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  email     String
+  name      String?
+  passwordHash String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}

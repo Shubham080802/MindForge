@@ -12,7 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Eye, EyeOff, Loader2, Mail, Lock, User, Github, Chrome } from "lucide-react";
+import { Eye, EyeOff, Loader2, Mail, Lock, User, Github, Chrome, ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const signUpSchema = z.object({
@@ -25,7 +25,12 @@ const signUpSchema = z.object({
   path: ["confirmPassword"],
 });
 
-type SignUpForm = z.infer<typeof signUpSchema>;
+const otpSchema = z.object({
+  otp: z.string().length(6, "Please enter the 6-digit code"),
+});
+
+type SignUpFormData = z.infer<typeof signUpSchema>;
+type OtpFormData = z.infer<typeof otpSchema>;
 
 export default function SignUpForm() {
   const router = useRouter();
@@ -36,21 +41,32 @@ export default function SignUpForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [step, setStep] = useState<"register" | "verify">("register");
+  const [pendingData, setPendingData] = useState<SignUpFormData | null>(null);
 
   const {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<SignUpForm>({
+    reset,
+  } = useForm<SignUpFormData>({
     resolver: zodResolver(signUpSchema),
   });
 
-  const onSubmit = async (data: SignUpForm) => {
+  const {
+    register: registerOtp,
+    handleSubmit: handleSubmitOtp,
+    formState: { errors: otpErrors },
+  } = useForm<OtpFormData>({
+    resolver: zodResolver(otpSchema),
+  });
+
+  const onSubmit = async (data: SignUpFormData) => {
     setIsLoading(true);
     setFormError("");
 
     try {
-      const res = await fetch("/api/auth/signup", {
+      const res = await fetch("/api/auth/send-otp", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -62,20 +78,55 @@ export default function SignUpForm() {
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.message || "Failed to create account");
+        throw new Error(error.message || "Failed to send verification code");
+      }
+
+      setPendingData(data);
+      setStep("verify");
+      reset();
+    } catch (err: unknown) {
+      setFormError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const onVerifySubmit = async (data: OtpFormData) => {
+    if (!pendingData) {
+      setFormError("Session expired. Please start over.");
+      setStep("register");
+      return;
+    }
+
+    setIsLoading(true);
+    setFormError("");
+
+    try {
+      const res = await fetch("/api/auth/verify-otp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: pendingData.email,
+          otp: data.otp,
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to verify code");
       }
 
       // After successful signup, sign in with credentials
       const result = await signIn("credentials", {
-        email: data.email,
-        password: data.password,
+        email: pendingData.email,
+        password: pendingData.password,
         redirect: false,
       });
 
       if (result?.error) {
         setFormError("Account created but sign in failed. Please sign in manually.");
       } else {
-        router.push("/workspace");
+        router.push(callbackUrl);
         router.refresh();
       }
     } catch (err: unknown) {
@@ -86,15 +137,25 @@ export default function SignUpForm() {
   };
 
   const handleOAuthSignIn = (provider: string) => {
-    window.location.href = `/api/auth/signin/${provider}?callbackUrl=${encodeURIComponent("/workspace")}`;
+    window.location.href = `/api/auth/signin/${provider}?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  };
+
+  const goBack = () => {
+    setStep("register");
+    setPendingData(null);
+    reset();
   };
 
   return (
     <div className="w-full max-w-md">
       <div className="rounded-xl border bg-card text-card-foreground shadow-sm w-full">
         <div className="flex flex-col space-y-1.5 p-6 text-center">
-          <h3 className="text-2xl font-semibold leading-none tracking-tight">Sign up</h3>
-          <p className="text-sm text-muted-foreground">Enter your details to create an account</p>
+          <h3 className="text-2xl font-semibold leading-none tracking-tight">{step === "register" ? "Sign up" : "Verify Email"}</h3>
+          <p className="text-sm text-muted-foreground">
+            {step === "register"
+              ? "Enter your details to create an account"
+              : "Enter the 6-digit code sent to your email"}
+          </p>
         </div>
         <div className="p-6 pt-0 space-y-4">
           {(error || formError) && (
@@ -103,102 +164,144 @@ export default function SignUpForm() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <input
-                  id="name"
-                  type="text"
-                  placeholder="John Doe"
-                  className="pl-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  {...register("name")}
-                  disabled={isLoading}
-                  aria-invalid={!!errors.name}
-                />
+          {step === "register" ? (
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <input
+                    id="name"
+                    type="text"
+                    placeholder="John Doe"
+                    className="pl-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    {...register("name")}
+                    disabled={isLoading}
+                    aria-invalid={!!errors.name}
+                  />
+                </div>
+                {errors.name && (
+                  <p className="text-sm text-destructive" role="alert">{errors.name.message}</p>
+                )}
               </div>
-              {errors.name && (
-                <p className="text-sm text-destructive" role="alert">{errors.name.message}</p>
-              )}
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <input
-                  id="email"
-                  type="email"
-                  placeholder="you@example.com"
-                  className="pl-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  {...register("email")}
-                  disabled={isLoading}
-                  aria-invalid={!!errors.email}
-                />
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    className="pl-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    {...register("email")}
+                    disabled={isLoading}
+                    aria-invalid={!!errors.email}
+                  />
+                </div>
+                {errors.email && (
+                  <p className="text-sm text-destructive" role="alert">{errors.email.message}</p>
+                )}
               </div>
-              {errors.email && (
-                <p className="text-sm text-destructive" role="alert">{errors.email.message}</p>
-              )}
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <input
-                  id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="........"
-                  className="pl-10 pr-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  {...register("password")}
-                  disabled={isLoading}
-                  aria-invalid={!!errors.password}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label={showPassword ? "Hide password" : "Show password"}
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="........"
+                    className="pl-10 pr-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    {...register("password")}
+                    disabled={isLoading}
+                    aria-invalid={!!errors.password}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+                {errors.password && (
+                  <p className="text-sm text-destructive" role="alert">{errors.password.message}</p>
+                )}
               </div>
-              {errors.password && (
-                <p className="text-sm text-destructive" role="alert">{errors.password.message}</p>
-              )}
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-                <input
-                  id="confirmPassword"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="........"
-                  className="pl-10 pr-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                  {...register("confirmPassword")}
-                  disabled={isLoading}
-                  aria-invalid={!!errors.confirmPassword}
-                />
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <input
+                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="........"
+                    className="pl-10 pr-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    {...register("confirmPassword")}
+                    disabled={isLoading}
+                    aria-invalid={!!errors.confirmPassword}
+                  />
+                </div>
+                {errors.confirmPassword && (
+                  <p className="text-sm text-destructive" role="alert">{errors.confirmPassword.message}</p>
+                )}
               </div>
-              {errors.confirmPassword && (
-                <p className="text-sm text-destructive" role="alert">{errors.confirmPassword.message}</p>
-              )}
-            </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading} size="lg">
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Creating account...
-                </>
-              ) : (
-                "Create Account"
-              )}
+              <Button type="submit" className="w-full" disabled={isLoading} size="lg">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Sending code...
+                  </>
+                ) : (
+                  "Send Verification Code"
+                )}
+              </Button>
+            </form>
+          ) : (
+            <form onSubmit={handleSubmitOtp(onVerifySubmit)} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="otp">Verification Code</Label>
+                <div className="relative">
+                  <input
+                    id="otp"
+                    type="text"
+                    placeholder="123456"
+                    className="pl-10 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 text-center text-2xl tracking-widest"
+                    {...registerOtp("otp")}
+                    disabled={isLoading}
+                    aria-invalid={!!otpErrors.otp}
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                  />
+                </div>
+                {otpErrors.otp && (
+                  <p className="text-sm text-destructive" role="alert">{otpErrors.otp.message}</p>
+                )}
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isLoading} size="lg">
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  "Verify & Create Account"
+                )}
+              </Button>
+            </form>
+          )}
+
+          {step === "verify" && (
+            <Button variant="ghost" className="w-full" onClick={goBack} disabled={isLoading}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
             </Button>
-          </form>
+          )}
 
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
@@ -212,7 +315,7 @@ export default function SignUpForm() {
           <div className="grid grid-cols-2 gap-3">
             <Button
               variant="outline"
-              onClick={() => window.location.href = `/api/auth/signin/google?callbackUrl=${encodeURIComponent("/workspace")}`}
+              onClick={() => handleOAuthSignIn("google")}
               disabled={isLoading}
               type="button"
             >
@@ -226,7 +329,7 @@ export default function SignUpForm() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => window.location.href = `/api/auth/signin/github?callbackUrl=${encodeURIComponent("/workspace")}`}
+              onClick={() => handleOAuthSignIn("github")}
               disabled={isLoading}
               type="button"
             >

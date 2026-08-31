@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 export const authOptions = {
   adapter: PrismaAdapter(prisma),
   session: { strategy: "jwt" as const },
+  allowDangerousEmailAccountLinking: true,
   pages: {
     signIn: "/auth/signin",
     error: "/auth/error",
@@ -49,6 +50,17 @@ export const authOptions = {
     }),
   ],
   callbacks: {
+    async signIn({ user, account, profile, email, credentials }: any) {
+      if (account?.provider === "google" || account?.provider === "github") {
+        if (!user.email) {
+          return false;
+        }
+        if (account.provider === "google" && profile?.email_verified === false) {
+          return false;
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }: { token: any; user: any }) {
       if (user) {
         (token as { id?: string }).id = user.id;

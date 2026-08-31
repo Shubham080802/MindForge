@@ -1,20 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Upload, FileText, Image, Send, Plus, X, File, Image as ImageIcon, MessageSquare } from "lucide-react";
+import { Upload, FileText, Image, Send, Plus, X, File, Image as ImageIcon, MessageSquare, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDropzone } from "react-dropzone";
 
 export default function WorkspacePage() {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
 
   const onDrop = (acceptedFiles: File[]) => {
     setFiles((prev) => [...prev, ...acceptedFiles]);
@@ -35,12 +38,60 @@ export default function WorkspacePage() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const uploadFiles = async (): Promise<string[]> => {
+    if (files.length === 0) return [];
+
+    const formData = new FormData();
+    files.forEach((file) => formData.append("files", file));
+
+    setUploadProgress({});
+    files.forEach((file) => setUploadProgress((prev) => ({ ...prev, [file.name]: 0 })));
+
+    const response = await fetch("/api/materials/upload", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || "Upload failed");
+    }
+
+    const data = await response.json();
+    return data.materials.map((m: any) => m.id);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() && files.length === 0) return;
     setIsProcessing(true);
-    // TODO: Submit to API
-    setTimeout(() => setIsProcessing(false), 2000);
+
+    try {
+      const materialIds = await uploadFiles();
+
+      const sessionRes = await fetch("/api/sessions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: query.slice(0, 80) || "New Study Session",
+          initialQuery: query,
+          materialIds,
+        }),
+      });
+
+      if (!sessionRes.ok) {
+        throw new Error("Failed to create session");
+      }
+
+      const { session } = await sessionRes.json();
+      router.push(`/workspace/${session.id}`);
+      router.refresh();
+    } catch (error) {
+      console.error("Submit error:", error);
+      alert(error instanceof Error ? error.message : "Failed to start session");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -71,6 +122,7 @@ export default function WorkspacePage() {
                   onChange={(e) => setQuery(e.target.value)}
                   rows={4}
                   className="resize-none"
+                  disabled={isProcessing}
                 />
               </div>
             </div>
@@ -117,11 +169,17 @@ export default function WorkspacePage() {
                       <span className="text-xs text-muted-foreground">
                         {(file.size / 1024).toFixed(1)} KB
                       </span>
+                      {uploadProgress[file.name] !== undefined && (
+                        <span className="text-xs text-primary">
+                          {uploadProgress[file.name]}%
+                        </span>
+                      )}
                       <button
                         type="button"
                         onClick={() => removeFile(index)}
                         className="ml-auto p-1 text-muted-foreground hover:text-destructive"
                         aria-label="Remove file"
+                        disabled={isProcessing}
                       >
                         <X className="h-4 w-4" />
                       </button>
@@ -134,7 +192,14 @@ export default function WorkspacePage() {
         </Card>
 
         <Button type="submit" className="w-full" size="lg" disabled={isProcessing || (!query.trim() && files.length === 0)}>
-          {isProcessing ? "Processing..." : "Analyze & Start Session"}
+          {isProcessing ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            "Analyze & Start Session"
+          )}
         </Button>
       </form>
 

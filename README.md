@@ -44,3 +44,80 @@ No environment variables are required for demo mode.
 Server-only secrets, strict zod validation, object allow-lists and size caps, private storage, RLS on every table, origin checks on mutations, CSP/security headers, and distributed rate limiting. See the migration and route handlers for enforceable controls.
 
 Before production: configure Supabase SMTP/OAuth redirects, enable MFA, set a WAF/request-body cap, rotate secrets, and run threat modelling.
+
+
+
+---
+
+Quick Start# Clone the repo
+git clone https://github.com/Shubham080802/MindForge.git
+
+# Install dependencies
+pnpm install
+
+# Set up database (Docker)
+docker run -d --name mindforge-db \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=mindforge \
+  -p 5432:5432 postgres:16
+
+
+# Run migrations
+npx prisma db push
+
+
+# Start dev server
+pnpm dev --port 3003
+Environment Setup
+# Copy example env
+cp .env.example .env.local
+
+
+# Required vars for local dev:
+DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mindforge?schema=public"
+NEXTAUTH_SECRET="dev-secret-change-in-production-min-32-chars-long"
+NEXTAUTH_URL="http://localhost:3003"
+Git Workflow
+# Check status
+git status
+
+
+# Stage all changes
+git add -A
+
+
+# Commit with conventional message
+git commit -m "feat: your feature description"
+
+
+# Push to main
+git push origin main
+Common Commands
+# Dev server
+pnpm dev --port 3003
+
+
+# Build
+pnpm build
+
+
+# Type check
+pnpm typecheck
+
+
+# Lint
+pnpm lint
+
+
+# Database
+npx prisma db push        # Push schema changes
+npx prisma studio         # Open Prisma Studio
+npx prisma generate       # Regenerate client
+
+
+# Git
+git log --oneline -10     # Recent commits
+git log --oneline --graph # Visual history
+git diff                  # Unstaged changes
+git diff --staged         # Staged changes
+

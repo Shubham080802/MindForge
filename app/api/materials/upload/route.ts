@@ -3,8 +3,46 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { createWorker } from "tesseract.js";
 
 export const runtime = "nodejs";
+
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+  try {
+    const pdfParse = await import("pdf-parse");
+    const data = await pdfParse.default(buffer);
+    return data.text || "";
+  } catch (error) {
+    console.error("PDF extraction error:", error);
+    return "[PDF text extraction failed]";
+  }
+}
+
+async function extractTextFromImage(buffer: Buffer, mimeType: string): Promise<string> {
+  try {
+    const worker = await createWorker("eng");
+    const { data: { text } } = await worker.recognize(buffer);
+    await worker.terminate();
+    return text.trim() || `[Image: No text detected]`;
+  } catch (error) {
+    console.error("OCR error:", error);
+    return `[Image: OCR failed]`;
+  }
+}
+
+async function extractTextFromDocument(buffer: Buffer, mimeType: string): Promise<string> {
+  // Handle Word documents, Markdown, etc.
+  if (mimeType === "application/msword" || 
+      mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document") {
+    // For .doc and .docx files, return placeholder for now
+    return "[Word document: Text extraction requires additional library]";
+  }
+  // For markdown, txt, and other text-based formats
+  if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType === "text/markdown") {
+    return buffer.toString("utf-8");
+  }
+  return `[Document: ${mimeType} - text extraction not yet implemented]`;
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,18 +79,14 @@ export async function POST(request: NextRequest) {
 
       let extractedText = "";
 
-      if (mimeType.startsWith("text/") || mimeType === "application/json") {
+      if (mimeType.startsWith("text/") || mimeType === "application/json" || mimeType === "text/markdown") {
         extractedText = buffer.toString("utf-8");
       } else if (mimeType === "application/pdf") {
-        try {
-          const pdfParse = await import("pdf-parse");
-          const data = await pdfParse.default(buffer);
-          extractedText = data.text;
-        } catch {
-          extractedText = "[PDF text extraction failed]";
-        }
+        extractedText = await extractTextFromPDF(buffer);
       } else if (mimeType.startsWith("image/")) {
-        extractedText = `[Image: ${file.name}] - OCR not yet implemented`;
+        extractedText = await extractTextFromImage(buffer, mimeType);
+      } else {
+        extractedText = await extractTextFromDocument(buffer, mimeType);
       }
 
       const material = await prisma.material.create({

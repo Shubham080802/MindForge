@@ -8,8 +8,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, MoreHorizontal, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Share2, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Upload } from "lucide-react";
+import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, MoreHorizontal, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Share2, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Upload, Eye, FileSearch } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
+import { PDFViewerDialog } from "./pdf-viewer-dialog";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 
@@ -59,6 +60,7 @@ export default function SessionPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
 
   const generateStudyTool = (tool: string) => {
     setInput(`Generate ${tool} for this session`);
@@ -155,7 +157,8 @@ export default function SessionPage() {
     );
   }
 
-  return (
+return (
+  <>
     <div className="h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
@@ -198,7 +201,11 @@ export default function SessionPage() {
                 <p className="text-sm text-muted-foreground text-center py-8">No materials uploaded</p>
               ) : (
                 session.materials.map((material) => (
-                  <MaterialCard key={material.id} material={material} />
+                  <MaterialCard
+                    key={material.id}
+                    material={material}
+                    onClick={() => setSelectedMaterial(material)}
+                  />
                 ))
               )}
             </ScrollArea>
@@ -290,7 +297,12 @@ export default function SessionPage() {
             <div className="flex-1 p-4 overflow-y-auto">
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {session.materials.map((material) => (
-                  <MaterialCard key={material.id} material={material} detailed />
+                  <MaterialCard
+                    key={material.id}
+                    material={material}
+                    detailed
+                    onClick={() => setSelectedMaterial(material)}
+                  />
                 ))}
               </div>
             </div>
@@ -349,7 +361,16 @@ export default function SessionPage() {
         </Button>
       </div>
     </div>
-  );
+
+    <PDFViewerDialog
+      material={selectedMaterial}
+      open={!!selectedMaterial}
+      onOpenChange={(open) => {
+        if (!open) setSelectedMaterial(null);
+      }}
+    />
+</>
+);
 }
 
 function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onSpeak: (id: string, text: string) => void; speakingId: string | null }) {
@@ -402,12 +423,12 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
   );
 }
 
-function MaterialCard({ material, detailed = false }: { material: Material; detailed?: boolean }) {
+function MaterialCard({ material, detailed = false, onClick }: { material: Material; detailed?: boolean; onClick?: () => void }) {
   const isImage = material.mimeType.startsWith("image/");
   const isPDF = material.type === "pdf";
 
   return (
-    <Card className={cn(detailed ? "h-full" : "")}>
+    <Card className={cn(detailed ? "h-full" : "")} onClick={onClick} style={onClick ? { cursor: "pointer" } : undefined}>
       <CardHeader className={detailed ? "pb-2" : "pb-1"}>
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -422,7 +443,7 @@ function MaterialCard({ material, detailed = false }: { material: Material; deta
             </div>
           </div>
           {detailed && (
-            <Button variant="ghost" size="icon" className="h-7 w-7">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); }}>
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           )}
@@ -438,7 +459,7 @@ function MaterialCard({ material, detailed = false }: { material: Material; deta
               <FileDown className="mr-1 h-3 w-3" />
               Download
             </Button>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); }}>
               <Edit className="mr-1 h-3 w-3" />
               View Text
             </Button>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, Mic, Zap, Shield, ArrowRightLeft, Info } from "lucide-react";
+import { UserDropdown } from "@/components/ui/user-dropdown";
 
 export default function HomePage() {
   return (
@@ -16,12 +17,7 @@ export default function HomePage() {
               <Info className="h-4 w-4" />
               About
             </Link>
-            <Link href="/auth/signin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Sign In
-            </Link>
-            <Link href="/auth/signup" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Sign Up
-            </Link>
+            <UserDropdown />
           </nav>
         </div>
       </header>

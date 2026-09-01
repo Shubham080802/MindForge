@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, BookOpen, Mic, Zap, Shield, ArrowRightLeft, Users, Lock, Code, Globe } from "lucide-react";
+import { UserDropdown } from "@/components/ui/user-dropdown";
 
 export default function AboutPage() {
   return (
@@ -12,12 +13,7 @@ export default function AboutPage() {
             <span className="text-foreground">Forge</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
-            <Link href="/auth/signin" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Sign In
-            </Link>
-            <Link href="/auth/signup" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Sign Up
-            </Link>
+            <UserDropdown />
           </nav>
         </div>
       </header>

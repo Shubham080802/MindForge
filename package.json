@@ -37,6 +37,7 @@
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
     "lucide-react": "^0.441.0",
     "mammoth": "^1.12.1",
     "next": "^15.2.4",

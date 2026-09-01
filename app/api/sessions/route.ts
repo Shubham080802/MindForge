@@ -33,6 +33,17 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // Save initial query as first user message if provided
+    if (initialQuery?.trim()) {
+      await prisma.message.create({
+        data: {
+          sessionId: newSession.id,
+          role: "user",
+          content: initialQuery.trim(),
+        },
+      });
+    }
+
     return NextResponse.json({
       session: {
         id: newSession.id,

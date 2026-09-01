@@ -63,14 +63,14 @@ model Message {
 
 model Material {
   id            String   @id @default(cuid())
-  sessionId     String
+  sessionId     String?
   type          String
   url           String
   mimeType      String
   size          Int
   extractedText String?  @db.Text
   createdAt     DateTime @default(now())
-  session       Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session       Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model PasswordResetToken {

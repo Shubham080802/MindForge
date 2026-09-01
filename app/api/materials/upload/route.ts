@@ -15,21 +15,20 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const files = formData.getAll("files") as File[];
-    const sessionId = formData.get("sessionId") as string;
+    const sessionId = formData.get("sessionId") as string | null;
 
     if (!files.length) {
       return NextResponse.json({ message: "No files provided" }, { status: 400 });
     }
 
-    if (!sessionId) {
-      return NextResponse.json({ message: "Session ID required" }, { status: 400 });
-    }
-
-    const sessionExists = await prisma.session.findFirst({
-      where: { id: sessionId, userId: session.user.id },
-    });
-    if (!sessionExists) {
-      return NextResponse.json({ message: "Session not found" }, { status: 404 });
+    // If sessionId provided, verify it belongs to user
+    if (sessionId) {
+      const sessionExists = await prisma.session.findFirst({
+        where: { id: sessionId, userId: session.user.id },
+      });
+      if (!sessionExists) {
+        return NextResponse.json({ message: "Session not found" }, { status: 404 });
+      }
     }
 
     const uploadedMaterials = [];
@@ -58,7 +57,7 @@ export async function POST(request: NextRequest) {
 
       const material = await prisma.material.create({
         data: {
-          sessionId,
+          sessionId: sessionId || null,
           type: mimeType.startsWith("image/") ? "image" : mimeType === "application/pdf" ? "pdf" : "document",
           url: `/api/materials/${fileHash}/download`,
           mimeType,

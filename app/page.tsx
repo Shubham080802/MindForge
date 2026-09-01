@@ -13,6 +13,9 @@ export default function HomePage() {
             <span className="text-foreground">Forge</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
+            <Link href="/library" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Library
+            </Link>
             <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5">
               <Info className="h-4 w-4" />
               About

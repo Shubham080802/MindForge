@@ -13,6 +13,9 @@ export default function AboutPage() {
             <span className="text-foreground">Forge</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
+            <Link href="/library" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+              Library
+            </Link>
             <UserDropdown />
           </nav>
         </div>

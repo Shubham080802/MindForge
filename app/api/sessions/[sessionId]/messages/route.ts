@@ -34,6 +34,16 @@ Guidelines:
 - Break down complex topics into digestible parts`;
 }
 
+function createSSEStream(controller: ReadableStreamDefaultController, text: string) {
+  const encoder = new TextEncoder();
+  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: text })}\n\n`));
+}
+
+function closeSSEStream(controller: ReadableStreamDefaultController) {
+  controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
+  controller.close();
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ sessionId: string }> }
@@ -45,7 +55,7 @@ export async function POST(
     }
 
     const { sessionId } = await params;
-    const { content } = await request.json();
+    const { content, stream = false } = await request.json();
 
     if (!content || !content.trim()) {
       return NextResponse.json({ message: "Content required" }, { status: 400 });
@@ -89,28 +99,97 @@ export async function POST(
       { role: "user" as const, content: content.trim() },
     ];
 
-    // Call OpenAI
-    let aiContent = "";
     let sources: Array<{ materialId: string; excerpt: string }> = [];
+
+    // Extract sources from materials
+    sources = sessionData.materials
+      .filter((m) => m.extractedText && m.extractedText.length > 0)
+      .slice(0, 3)
+      .map((m) => ({
+        materialId: m.id,
+        excerpt: m.extractedText?.slice(0, 200) || "",
+      }));
+
+    // If streaming requested, return SSE stream
+    if (stream) {
+      const stream = new ReadableStream({
+        async start(controller) {
+          const encoder = new TextEncoder();
+          
+          try {
+            let fullContent = "";
+            
+            const completion = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [
+                { role: "system", content: systemPrompt },
+                ...recentMessages.reverse().map((m) => ({
+                  role: m.role as "user" | "assistant",
+                  content: m.content,
+                })),
+                { role: "user", content: content.trim() },
+              ],
+              temperature: 0.7,
+              max_tokens: 2000,
+              stream: true,
+            });
+
+            for await (const chunk of completion) {
+              const delta = chunk.choices[0]?.delta?.content || "";
+              if (delta) {
+                fullContent += delta;
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: delta, done: false })}\n\n`));
+              }
+            }
+
+            // Save complete assistant message
+            const assistantMessage = await prisma.message.create({
+              data: {
+                sessionId,
+                role: "assistant",
+                content: fullContent,
+                metadata: { sources },
+              },
+            });
+
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ message: assistantMessage, done: true })}\n\n`));
+          } catch (aiError) {
+            console.error("OpenAI stream error:", aiError);
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Failed to generate response", done: true })}\n\n`));
+          } finally {
+            closeSSEStream(controller);
+          }
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream",
+          "Cache-Control": "no-cache",
+          "Connection": "keep-alive",
+        },
+      });
+    }
+
+    // Non-streaming fallback (original behavior)
+    let aiContent = "";
 
     try {
       const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",
-        messages,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...recentMessages.reverse().map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+          })),
+          { role: "user", content: content.trim() },
+        ],
         temperature: 0.7,
         max_tokens: 2000,
       });
 
       aiContent = completion.choices[0]?.message?.content || "I couldn't generate a response.";
-
-      // Extract sources from materials that were likely used
-      sources = sessionData.materials
-        .filter((m) => m.extractedText && m.extractedText.length > 0)
-        .slice(0, 3)
-        .map((m) => ({
-          materialId: m.id,
-          excerpt: m.extractedText?.slice(0, 200) || "",
-        }));
     } catch (aiError) {
       console.error("OpenAI error:", aiError);
       aiContent = "I encountered an error while generating a response. Please check your OpenAI API key and try again.";

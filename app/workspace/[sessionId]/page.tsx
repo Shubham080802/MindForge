@@ -111,13 +111,64 @@ export default function SessionPage() {
       const res = await fetch(`/api/sessions/${sessionId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: input }),
+        body: JSON.stringify({ content: input, stream: true }),
       });
 
       if (!res.ok) throw new Error("Failed to send message");
 
-      const data = await res.json();
-      setMessages((prev) => [...prev, data.message]);
+      // Handle streaming response
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let assistantMessageId = crypto.randomUUID();
+      let fullContent = "";
+
+      // Add placeholder assistant message
+      const assistantMessage: Message = {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        createdAt: new Date().toISOString(),
+      };
+      setMessages((prev) => [...prev, assistantMessage]);
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value);
+          const lines = chunk.split("\n");
+          
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.content && !data.done) {
+                  fullContent += data.content;
+                  setMessages((prev) => 
+                    prev.map((m) => 
+                      m.id === assistantMessageId 
+                        ? { ...m, content: fullContent }
+                        : m
+                    )
+                  );
+                } else if (data.done && data.message) {
+                  // Final message with metadata
+                  setMessages((prev) => 
+                    prev.map((m) => 
+                      m.id === assistantMessageId 
+                        ? { ...data.message, content: fullContent }
+                        : m
+                    )
+                  );
+                }
+              } catch (e) {
+                // Ignore parsing errors
+              }
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error("Send message error:", error);
       alert("Failed to send message");

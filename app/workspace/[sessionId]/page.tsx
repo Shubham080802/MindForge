@@ -61,10 +61,30 @@ export default function SessionPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [studyToolResult, setStudyToolResult] = useState<{ tool: string; result: any } | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const generateStudyTool = (tool: string) => {
-    setInput(`Generate ${tool} for this session`);
-    setActiveTab("chat");
+  const generateStudyTool = async (tool: string) => {
+    setIsGenerating(true);
+    setStudyToolResult(null);
+
+    try {
+      const res = await fetch(`/api/study-tools/${sessionId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", credentials: "include" },
+        body: JSON.stringify({ tool, content: "" }),
+      });
+
+      if (!res.ok) throw new Error("Failed to generate");
+
+      const data = await res.json();
+      setStudyToolResult({ tool, result: data.result });
+    } catch (error) {
+      console.error("Study tool error:", error);
+      alert("Failed to generate study tool");
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   useEffect(() => {
@@ -303,20 +323,35 @@ return (
                     <p className="text-sm mt-1">Ask questions about your uploaded materials</p>
                   </div>
                 ) : (
-                  messages.map((message) => (
-                    <MessageBubble
-                      key={message.id}
-                      message={message}
-                      onSpeak={speakMessage}
-                      speakingId={speakingMessageId}
-                    />
-                  ))
-                )}
-                {isLoading && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>AI is thinking...</span>
-                  </div>
+                  <>
+                    {messages.map((message) => (
+                      <MessageBubble
+                        key={message.id}
+                        message={message}
+                        onSpeak={speakMessage}
+                        speakingId={speakingMessageId}
+                      />
+                    ))}
+                    {isLoading && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>AI is thinking...</span>
+                      </div>
+                    )}
+                    {studyToolResult && (
+                      <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="font-semibold capitalize">{studyToolResult.tool} Result</h3>
+                          <Button variant="ghost" size="sm" onClick={() => setStudyToolResult(null)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                        <div className="prose prose-sm max-w-none">
+                          <pre className="whitespace-pre-wrap text-sm font-mono bg-muted p-4 rounded">{JSON.stringify(studyToolResult.result, null, 2)}</pre>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
                 <div ref={messagesEndRef} />
               </ScrollArea>

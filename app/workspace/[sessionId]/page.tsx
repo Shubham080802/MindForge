@@ -197,21 +197,53 @@ export default function SessionPage() {
     }
   };
 
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   const speakMessage = async (messageId: string, text: string) => {
-    if (speakingMessageId === messageId) {
-      speechSynthesis.cancel();
+    if (speakingMessageId === messageId && audioRef.current?.paused === false) {
+      audioRef.current.pause();
+      audioRef.current = null;
       setSpeakingMessageId(null);
       return;
     }
 
-    speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+
     setSpeakingMessageId(messageId);
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
-    utterance.onend = () => setSpeakingMessageId(null);
-    utterance.onerror = () => setSpeakingMessageId(null);
-    speechSynthesis.speak(utterance);
+    try {
+      const res = await fetch("/api/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", credentials: "include" },
+        body: JSON.stringify({ text: text.slice(0, 4096) }),
+      });
+
+      if (!res.ok) throw new Error("TTS failed");
+
+      const blob = await res.blob();
+      const audioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.onended = () => {
+        setSpeakingMessageId(null);
+        URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
+      };
+      audio.onerror = () => {
+        setSpeakingMessageId(null);
+        URL.revokeObjectURL(audioUrl);
+        audioRef.current = null;
+      };
+
+      await audio.play();
+    } catch (error) {
+      console.error("TTS error:", error);
+      setSpeakingMessageId(null);
+    }
   };
 
   const formatSize = (bytes: number) => {

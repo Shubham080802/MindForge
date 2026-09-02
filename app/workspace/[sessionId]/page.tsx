@@ -77,7 +77,7 @@ export default function SessionPage() {
 
   const fetchSession = useCallback(async () => {
     try {
-      const res = await fetch(`/api/sessions/${sessionId}`);
+      const res = await fetch(`/api/sessions/${sessionId}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch session");
       const data = await res.json();
       setSession(data.session);
@@ -108,7 +108,7 @@ export default function SessionPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch(`/api/sessions/${sessionId}/messages`, {
+      const res = await fetch(`/api/sessions/${sessionId}/messages`, { credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content: input, stream: true }),

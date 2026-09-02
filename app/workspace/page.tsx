@@ -47,7 +47,7 @@ export default function WorkspacePage() {
     setUploadProgress({});
     files.forEach((file) => setUploadProgress((prev) => ({ ...prev, [file.name]: 0 })));
 
-    const response = await fetch("/api/materials/upload", {
+    const response = await fetch("/api/materials/upload", { credentials: "include",
       method: "POST",
       body: formData,
     });
@@ -69,7 +69,7 @@ export default function WorkspacePage() {
     try {
       const materialIds = await uploadFiles();
 
-      const sessionRes = await fetch("/api/sessions", {
+      const sessionRes = await fetch("/api/sessions", { credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

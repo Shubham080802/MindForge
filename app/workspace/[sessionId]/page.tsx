@@ -63,6 +63,8 @@ export default function SessionPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [studyToolResult, setStudyToolResult] = useState<{ tool: string; result: any } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [exportFormat, setExportFormat] = useState<"markdown" | "json" | "pdf" | null>(null);
+  const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
 
   const generateStudyTool = async (tool: string) => {
     setIsGenerating(true);
@@ -79,11 +81,43 @@ export default function SessionPage() {
 
       const data = await res.json();
       setStudyToolResult({ tool, result: data.result });
+      setStoredToolResults((prev) => ({ ...prev, [tool]: data.result }));
     } catch (error) {
       console.error("Study tool error:", error);
       alert("Failed to generate study tool");
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleExport = async (format: "markdown" | "json" | "pdf") => {
+    setExportFormat(null);
+    try {
+      const res = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", credentials: "include" },
+        body: JSON.stringify({
+          sessionId,
+          format,
+          toolResults: storedToolResults,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Export failed");
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const extension = format === "pdf" ? "html" : format;
+      a.download = `mindforge-export-${Date.now()}.${extension}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Failed to export");
     }
   };
 
@@ -374,9 +408,15 @@ return (
                       <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="font-semibold capitalize">{studyToolResult.tool} Result</h3>
-                          <Button variant="ghost" size="sm" onClick={() => setStudyToolResult(null)}>
-                            <X className="h-4 w-4" />
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button variant="ghost" size="sm" onClick={() => setExportFormat("markdown")}>
+                              <FileDown className="h-4 w-4" />
+                              <span className="hidden sm:inline">Export</span>
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setStudyToolResult(null)}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                         <div className="prose prose-sm max-w-none">
                           <pre className="whitespace-pre-wrap text-sm font-mono bg-muted p-4 rounded">{JSON.stringify(studyToolResult.result, null, 2)}</pre>
@@ -460,10 +500,34 @@ return (
               <StudyToolCard
                 icon={<FileDown className="h-6 w-6" />}
                 title="Export Notes"
-                description="Download chat history and notes as PDF or Markdown"
+                description="Download chat history and notes as PDF, Markdown, or JSON"
                 action="Export"
-                onClick={() => generateStudyTool("export")}
+                onClick={() => setExportFormat("markdown")}
               />
+              {exportFormat && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setExportFormat(null)}>
+                  <div className="bg-card rounded-lg p-4 w-full max-w-sm shadow-lg" onClick={(e) => e.stopPropagation()}>
+                    <h3 className="font-semibold mb-4">Choose Export Format</h3>
+                    <div className="space-y-2">
+                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("json")}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        JSON
+                      </Button>
+                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("markdown")}>
+                        <FileDown className="mr-2 h-4 w-4" />
+                        Markdown
+                      </Button>
+                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("pdf")}>
+                        <FileText className="mr-2 h-4 w-4" />
+                        PDF (via HTML)
+                      </Button>
+                    </div>
+                    <Button className="w-full mt-4" variant="ghost" onClick={() => setExportFormat(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </main>

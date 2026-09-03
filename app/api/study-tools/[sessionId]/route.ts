@@ -27,9 +27,6 @@ Format as JSON with: { "questions": [{ "question": "...", "type": "multiple_choi
 
   translate: `Translate the provided content to the target language. Preserve formatting and technical terms.
 Format as JSON with: { "translatedContent": "..." }`,
-
-  export: `Export the study session content in the requested format.
-Format as JSON with: { "content": "...", "format": "markdown|json|pdf" }`,
 };
 
 async function buildContextFromMaterials(materials: Array<{ extractedText: string | null; url: string; type: string }>) {
@@ -50,9 +47,9 @@ export async function POST(
     }
 
     const { sessionId } = await params;
-    const { tool, content, targetLanguage, format } = await request.json();
+    const { tool, content, targetLanguage } = await request.json();
 
-    if (!tool || !["summary", "concepts", "quiz", "translate", "export"].includes(tool)) {
+    if (!tool || !["summary", "concepts", "quiz", "translate"].includes(tool)) {
       return NextResponse.json({ message: "Invalid tool" }, { status: 400 });
     }
 
@@ -68,7 +65,7 @@ export async function POST(
 
     const context = await buildContextFromMaterials(sessionData.materials);
 
-    if (!context && tool !== "export") {
+    if (!context) {
       return NextResponse.json({ message: "No study materials with extractable text found" }, { status: 400 });
     }
 
@@ -76,10 +73,6 @@ export async function POST(
     
     if (tool === "translate") {
       systemPrompt += `\nTarget language: ${targetLanguage || "Spanish"}`;
-    }
-    
-    if (tool === "export") {
-      systemPrompt += `\nExport format: ${format || "markdown"}`;
     }
 
     const messages = [

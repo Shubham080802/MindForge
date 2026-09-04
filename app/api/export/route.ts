@@ -2,8 +2,132 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 export const runtime = "nodejs";
+
+async function generatePdf(
+  title: string,
+  createdAt: string,
+  materials: Array<{ url: string; type: string; size: number }>,
+  messages: Array<{ role: string; content: string; createdAt: string }>,
+  toolResults: Record<string, any>
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const margin = 50;
+  const contentWidth = pageWidth - margin * 2;
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  let y = pageHeight - margin;
+
+  const addText = (text: string, fontSize = 12, isBold = false, color = rgb(0, 0, 0)) => {
+    const f = isBold ? boldFont : font;
+    const lines = f.widthOfTextAtSize(text, fontSize) > contentWidth
+      ? wrapText(text, fontSize, contentWidth, f)
+      : [text];
+    
+    for (const line of lines) {
+      if (y - fontSize < margin) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+      }
+      page.drawText(line, { x: margin, y, size: fontSize, font: f, color });
+      y -= fontSize + 2;
+    }
+    return lines.length;
+  };
+
+  const wrapText = (text: string, fontSize: number, maxWidth: number, font: any): string[] => {
+    const words = text.split(" ");
+    const lines: string[] = [];
+    let currentLine = "";
+    
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (font.widthOfTextAtSize(testLine, fontSize) <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines;
+  };
+
+  const addSectionHeader = (title: string) => {
+    y -= 8;
+    addText(title, 16, true, rgb(0.1, 0.1, 0.1));
+    y -= 4;
+    page.drawLine({
+      start: { x: margin, y },
+      end: { x: pageWidth - margin, y },
+      thickness: 1,
+      color: rgb(0.8, 0.8, 0.8),
+    });
+    y -= 12;
+  };
+
+  // Title
+  addText(title, 24, true, rgb(0.1, 0.2, 0.5));
+  y -= 4;
+  addText(`Created: ${new Date(createdAt).toLocaleDateString()} | Exported: ${new Date().toLocaleDateString()}`, 10, false, rgb(0.4, 0.4, 0.4));
+  y -= 20;
+
+  // Materials
+  if (materials.length > 0) {
+    addSectionHeader("Materials");
+    materials.forEach((m, i) => {
+      const name = m.url.split("/").pop() || "Document";
+      addText(`${i + 1}. ${name} (${m.type}, ${(m.size / 1024).toFixed(1)} KB)`, 11);
+    });
+    y -= 10;
+  }
+
+  // Conversation
+  if (messages.length > 0) {
+    addSectionHeader("Conversation");
+    messages.forEach((m) => {
+      const isUser = m.role === "user";
+      addText(`${isUser ? "You" : "AI"} - ${new Date(m.createdAt).toLocaleString()}`, 10, true, isUser ? rgb(0.2, 0.4, 0.8) : rgb(0.1, 0.6, 0.2));
+      const contentLines = wrapText(m.content, 11, contentWidth, font);
+      for (const line of contentLines) {
+        if (y - 11 < margin) {
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          y = pageHeight - margin;
+        }
+        page.drawText(line, { x: margin + 10, y, size: 11, font, color: rgb(0.1, 0.1, 0.1) });
+        y -= 13;
+      }
+      y -= 10;
+    });
+  }
+
+  // Study Tools Results
+  if (toolResults && Object.keys(toolResults).length > 0) {
+    addSectionHeader("Study Tools Results");
+    Object.entries(toolResults).forEach(([tool, result]) => {
+      addText(tool.charAt(0).toUpperCase() + tool.slice(1), 13, true, rgb(0.3, 0.3, 0.5));
+      y -= 4;
+      const content = typeof result === "object" ? JSON.stringify(result, null, 2) : String(result);
+      const contentLines = wrapText(content, 10, contentWidth, font);
+      for (const line of contentLines) {
+        if (y - 10 < margin) {
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          y = pageHeight - margin;
+        }
+        page.drawText(line, { x: margin + 10, y, size: 10, font, color: rgb(0.2, 0.2, 0.2) });
+        y -= 12;
+      }
+      y -= 8;
+    });
+  }
+
+  return pdfDoc.save();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,13 +136,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
     }
 
-    const { sessionId, format, content, toolResults } = await request.json();
+    const { sessionId, format, content, toolResults, toolName } = await request.json();
 
     if (!sessionId || !format || !["markdown", "json", "pdf"].includes(format)) {
       return NextResponse.json({ message: "Invalid parameters" }, { status: 400 });
     }
 
-    // Verify session ownership
     const sessionData = await prisma.session.findFirst({
       where: { id: sessionId, userId: session.user.id },
       include: { materials: true, messages: true },
@@ -28,7 +151,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Session not found" }, { status: 404 });
     }
 
-    let exportContent = "";
     const filename = `mindforge-${sessionData.title.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
 
     if (format === "json") {
@@ -51,8 +173,15 @@ export async function POST(request: NextRequest) {
         toolResults: toolResults || {},
         exportedAt: new Date().toISOString(),
       };
-      exportContent = JSON.stringify(exportData, null, 2);
-    } else if (format === "markdown") {
+      return new NextResponse(JSON.stringify(exportData, null, 2), {
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Disposition": `attachment; filename="${filename}.json"`,
+        },
+      });
+    }
+
+    if (format === "markdown") {
       let md = `# ${sessionData.title}\n\n`;
       md += `**Created:** ${new Date(sessionData.createdAt).toLocaleDateString()}\n`;
       md += `**Exported:** ${new Date().toLocaleDateString()}\n\n`;
@@ -85,81 +214,50 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      exportContent = md;
-    } else if (format === "pdf") {
-      // For PDF, we'll return HTML that can be printed/saved as PDF
-      // The client will handle the actual PDF generation via browser print
-      let html = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <title>${sessionData.title}</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 40px 20px; line-height: 1.6; }
-    h1 { color: #1a1a1a; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
-    h2 { color: #374151; margin-top: 30px; border-bottom: 1px solid #e5e7eb; padding-bottom: 5px; }
-    h3 { color: #4b5563; }
-    pre { background: #f3f4f6; padding: 15px; border-radius: 8px; overflow-x: auto; }
-    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
-    .message { margin-bottom: 20px; padding: 15px; border-radius: 8px; }
-    .user { background: #eff6ff; border-left: 4px solid #3b82f6; }
-    .assistant { background: #f0fdf4; border-left: 4px solid #22c55e; }
-    .meta { color: #6b7280; font-size: 0.9em; margin-bottom: 10px; }
-  </style>
-</head>
-<body>
-  <h1>${sessionData.title}</h1>
-  <div class="meta">Created: ${new Date(sessionData.createdAt).toLocaleDateString()} | Exported: ${new Date().toLocaleDateString()}</div>
-`;
-
-      if (sessionData.materials.length > 0) {
-        html += "<h2>Materials</h2><ul>";
-        sessionData.materials.forEach((m) => {
-          html += `<li>${m.url.split("/").pop()} (${m.type}, ${(m.size / 1024).toFixed(1)} KB)</li>`;
-        });
-        html += "</ul>";
-      }
-
-      if (sessionData.messages.length > 0) {
-        html += "<h2>Conversation</h2>";
-        sessionData.messages.forEach((m) => {
-          const roleClass = m.role === "user" ? "user" : "assistant";
-          html += `<div class="message ${roleClass}"><div class="meta">${m.role === "user" ? "👤 You" : "🤖 AI"} - ${new Date(m.createdAt).toLocaleString()}</div>${m.content.replace(/\n/g, "<br>")}</div>`;
-        });
-      }
-
-      if (toolResults) {
-        html += "<h2>Study Tools Results</h2>";
-        Object.entries(toolResults).forEach(([tool, result]) => {
-          html += `<h3>${tool.charAt(0).toUpperCase() + tool.slice(1)}</h3>`;
-          if (typeof result === "object") {
-            html += "<pre>" + JSON.stringify(result, null, 2).replace(/</g, "<").replace(/>/g, ">") + "</pre>";
-          } else {
-            html += "<p>" + String(result).replace(/\n/g, "<br>") + "</p>";
-          }
-        });
-      }
-
-      html += "</body></html>";
-      exportContent = html;
-    }
-
-    if (format === "pdf") {
-      return new NextResponse(exportContent, {
+      return new NextResponse(md, {
         headers: {
-          "Content-Type": "text/html",
-          "Content-Disposition": `attachment; filename="${filename}.html"`,
+          "Content-Type": "text/markdown",
+          "Content-Disposition": `attachment; filename="${filename}.md"`,
         },
       });
     }
 
-    const mimeType = format === "json" ? "application/json" : "text/markdown";
-    return new NextResponse(exportContent, {
-      headers: {
-        "Content-Type": mimeType,
-        "Content-Disposition": `attachment; filename="${filename}.${format}"`,
-      },
-    });
+    if (format === "pdf") {
+      if (toolName && toolResults && toolResults[toolName]) {
+        // Export single tool result
+        const singleToolResults: Record<string, any> = { [toolName]: toolResults[toolName] };
+        const pdfBytes = await generatePdf(
+          `${sessionData.title} - ${toolName}`,
+          sessionData.createdAt.toISOString(),
+          [],
+          [],
+          singleToolResults
+        );
+        return new NextResponse(Buffer.from(pdfBytes), {
+          headers: {
+            "Content-Type": "application/pdf",
+            "Content-Disposition": `attachment; filename="${filename}-${toolName}.pdf"`,
+          },
+        });
+      }
+
+      const pdfBytes = await generatePdf(
+        sessionData.title,
+        sessionData.createdAt.toISOString(),
+        sessionData.materials,
+        sessionData.messages.map(m => ({ role: m.role, content: m.content, createdAt: m.createdAt.toISOString() })),
+        toolResults || {}
+      );
+
+      return new NextResponse(Buffer.from(pdfBytes), {
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": `attachment; filename="${filename}.pdf"`,
+        },
+      });
+    }
+
+    return NextResponse.json({ message: "Invalid format" }, { status: 400 });
   } catch (error) {
     console.error("Export error:", error);
     return NextResponse.json({ message: "Failed to export" }, { status: 500 });

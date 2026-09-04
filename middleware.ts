@@ -6,6 +6,7 @@ export default withAuth(
     const isLoggedIn = !!req.nextauth.token;
     const isOnAuth = req.nextUrl.pathname.startsWith("/auth");
     const isOnWorkspace = req.nextUrl.pathname.startsWith("/workspace");
+    const isOnLibrary = req.nextUrl.pathname.startsWith("/library");
     const isOnApi = req.nextUrl.pathname.startsWith("/api");
     const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
     const isAuthPage = ["/auth/signin", "/auth/signup", "/auth/forgot-password", "/auth/reset-password", "/auth/verify-request"].includes(req.nextUrl.pathname);
@@ -20,7 +21,7 @@ export default withAuth(
       return Response.redirect(new URL("/workspace", req.nextUrl));
     }
 
-    if ((isOnWorkspace || (isOnApi && !isAuthApi)) && !isLoggedIn) {
+    if ((isOnWorkspace || isOnLibrary || (isOnApi && !isAuthApi)) && !isLoggedIn) {
       const callbackUrl = encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search);
       return Response.redirect(new URL(`/auth/signin?callbackUrl=${callbackUrl}`, req.nextUrl));
     }
@@ -30,6 +31,7 @@ export default withAuth(
       authorized: ({ token, req }) => {
         const isOnAuth = req.nextUrl.pathname.startsWith("/auth");
         const isOnWorkspace = req.nextUrl.pathname.startsWith("/workspace");
+        const isOnLibrary = req.nextUrl.pathname.startsWith("/library");
         const isOnApi = req.nextUrl.pathname.startsWith("/api");
         const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
         const isAuthPage = ["/auth/signin", "/auth/signup", "/auth/forgot-password", "/auth/reset-password", "/auth/verify-request"].includes(req.nextUrl.pathname);
@@ -37,8 +39,8 @@ export default withAuth(
         // Allow auth pages without token
         if (isAuthPage) return true;
         
-        // Require token for workspace and API
-        if (isOnWorkspace || (isOnApi && !isAuthApi)) {
+        // Require token for workspace, library, and API
+        if (isOnWorkspace || isOnLibrary || (isOnApi && !isAuthApi)) {
           return !!token;
         }
         return true;

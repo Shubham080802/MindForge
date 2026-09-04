@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, Mic, Zap, Shield, ArrowRightLeft, Info } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
+import { useSession } from "next-auth/react";
 
 export default function HomePage() {
+  const { data: session } = useSession();
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50">
@@ -13,9 +17,11 @@ export default function HomePage() {
             <span className="text-foreground">Forge</span>
           </Link>
           <nav className="hidden md:flex items-center gap-6">
-            <Link href="/library" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              Library
-            </Link>
+            {session?.user && (
+              <Link href="/library" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                Library
+              </Link>
+            )}
             <Link href="/about" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1.5">
               <Info className="h-4 w-4" />
               About

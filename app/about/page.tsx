@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, BookOpen, Mic, Zap, Shield, ArrowRightLeft, Users, Lock, Code, Globe } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
+import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
 export default function AboutPage() {
   return (
@@ -16,6 +17,7 @@ export default function AboutPage() {
             <Link href="/library" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               Library
             </Link>
+            <DarkModeToggle />
             <UserDropdown />
           </nav>
         </div>

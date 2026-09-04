@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Search, Plus, FileText, MessageSquare, Calendar, ChevronRight, Filter, X, Trash2, Edit, File, FileSearch, MessageCircle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
 interface Session {
   id: string;
@@ -177,6 +178,7 @@ export default function LibraryPage() {
             <Link href="/workspace" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               New Session
             </Link>
+            <DarkModeToggle />
           </nav>
         </div>
       </header>

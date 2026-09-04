@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowRight, BookOpen, Mic, Zap, Shield, ArrowRightLeft, Info } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
 import { useSession } from "next-auth/react";
+import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 
 export default function HomePage() {
   const { data: session } = useSession();
@@ -26,6 +27,7 @@ export default function HomePage() {
               <Info className="h-4 w-4" />
               About
             </Link>
+            <DarkModeToggle />
             <UserDropdown />
           </nav>
         </div>

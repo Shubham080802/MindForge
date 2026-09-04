@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
 import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, MoreHorizontal, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Share2, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Upload, Eye, FileSearch } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
+import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { PDFViewerDialog } from "./pdf-viewer-dialog";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
@@ -327,6 +328,7 @@ return (
                 <span>Exporting {exportProgress.format?.toUpperCase()}...</span>
               </div>
             )}
+            <DarkModeToggle />
             <UserDropdown />
           </div>
         </div>

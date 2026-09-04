@@ -65,6 +65,7 @@ export default function SessionPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [exportFormat, setExportFormat] = useState<"markdown" | "json" | "pdf" | null>(null);
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
+  const [exportProgress, setExportProgress] = useState<{ active: boolean; format?: string }>({ active: false });
 
   const generateStudyTool = async (tool: string) => {
     setIsGenerating(true);
@@ -90,8 +91,9 @@ export default function SessionPage() {
     }
   };
 
-  const handleExport = async (format: "markdown" | "json" | "pdf") => {
+  const handleExport = async (format: "markdown" | "json" | "pdf", toolName?: string) => {
     setExportFormat(null);
+    setExportProgress({ active: true, format });
     try {
       const res = await fetch("/api/export", {
         method: "POST",
@@ -100,6 +102,7 @@ export default function SessionPage() {
           sessionId,
           format,
           toolResults: storedToolResults,
+          toolName,
         }),
       });
 
@@ -109,8 +112,8 @@ export default function SessionPage() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      const extension = format === "pdf" ? "html" : format;
-      a.download = `mindforge-export-${Date.now()}.${extension}`;
+      const extension = format === "pdf" ? "pdf" : format;
+      a.download = `mindforge-export-${Date.now()}${toolName ? `-${toolName}` : ""}.${extension}`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -118,6 +121,8 @@ export default function SessionPage() {
     } catch (error) {
       console.error("Export error:", error);
       alert("Failed to export");
+    } finally {
+      setExportProgress({ active: false });
     }
   };
 
@@ -316,6 +321,12 @@ return (
             <Button variant="ghost" size="icon" className="hidden sm:flex">
               <Share2 className="h-4 w-4" />
             </Button>
+            {exportProgress.active && (
+              <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-lg text-sm text-primary">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Exporting {exportProgress.format?.toUpperCase()}...</span>
+              </div>
+            )}
             <UserDropdown />
           </div>
         </div>
@@ -409,11 +420,19 @@ return (
                         <div className="flex items-center justify-between mb-4">
                           <h3 className="font-semibold capitalize">{studyToolResult.tool} Result</h3>
                           <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => setExportFormat("markdown")}>
-                              <FileDown className="h-4 w-4" />
-                              <span className="hidden sm:inline">Export</span>
+                            <Button variant="ghost" size="sm" onClick={() => handleExport("pdf", studyToolResult.tool)} disabled={exportProgress.active}>
+                              <FileText className="h-4 w-4" />
+                              <span className="hidden sm:inline">PDF</span>
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setStudyToolResult(null)}>
+                            <Button variant="ghost" size="sm" onClick={() => handleExport("markdown", studyToolResult.tool)} disabled={exportProgress.active}>
+                              <FileDown className="h-4 w-4" />
+                              <span className="hidden sm:inline">MD</span>
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleExport("json", studyToolResult.tool)} disabled={exportProgress.active}>
+                              <FileText className="h-4 w-4" />
+                              <span className="hidden sm:inline">JSON</span>
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setStudyToolResult(null)} disabled={exportProgress.active}>
                               <X className="h-4 w-4" />
                             </Button>
                           </div>
@@ -509,20 +528,38 @@ return (
                   <div className="bg-card rounded-lg p-4 w-full max-w-sm shadow-lg" onClick={(e) => e.stopPropagation()}>
                     <h3 className="font-semibold mb-4">Choose Export Format</h3>
                     <div className="space-y-2">
-                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("json")}>
+                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("json")} disabled={exportProgress.active}>
                         <FileText className="mr-2 h-4 w-4" />
                         JSON
                       </Button>
-                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("markdown")}>
+                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("markdown")} disabled={exportProgress.active}>
                         <FileDown className="mr-2 h-4 w-4" />
                         Markdown
                       </Button>
-                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("pdf")}>
+                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("pdf")} disabled={exportProgress.active}>
                         <FileText className="mr-2 h-4 w-4" />
-                        PDF (via HTML)
+                        PDF
                       </Button>
                     </div>
-                    <Button className="w-full mt-4" variant="ghost" onClick={() => setExportFormat(null)}>
+                    {Object.keys(storedToolResults).length > 0 && (
+                      <div className="mt-4 border-t pt-4">
+                        <h4 className="text-sm font-medium mb-2">Export Individual Tool</h4>
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {Object.entries(storedToolResults).map(([tool]) => (
+                            <Button
+                              key={tool}
+                              className="w-full justify-start text-xs"
+                              variant="ghost"
+                              onClick={() => handleExport("pdf", tool)}
+                              disabled={exportProgress.active}
+                            >
+                              {tool.charAt(0).toUpperCase() + tool.slice(1)} (PDF)
+                            </Button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    <Button className="w-full mt-4" variant="ghost" onClick={() => setExportFormat(null)} disabled={exportProgress.active}>
                       Cancel
                     </Button>
                   </div>

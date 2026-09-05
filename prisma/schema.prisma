@@ -14,6 +14,7 @@ model User {
   passwordHash        String?
   image               String?
   language            String    @default("en")
+  openaiApiKey        String?
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   sessions            Session[]

@@ -14,6 +14,7 @@ import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { PDFViewerDialog } from "./pdf-viewer-dialog";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -300,9 +301,10 @@ export default function SessionPage() {
     );
   }
 
-return (
-  <>
-    <div className="h-screen flex flex-col bg-background">
+  return (
+    <ErrorBoundary>
+      <>
+        <div className="h-screen flex flex-col bg-background">
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
         <div className="container flex h-16 items-center justify-between px-4">
@@ -590,8 +592,9 @@ return (
         if (!open) setSelectedMaterial(null);
       }}
     />
-</>
-);
+    </>
+    </ErrorBoundary>
+  );
 }
 
 function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onSpeak: (id: string, text: string) => void; speakingId: string | null }) {

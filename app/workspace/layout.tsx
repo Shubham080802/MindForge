@@ -5,12 +5,13 @@ import { Sidebar } from "@/components/sidebar";
 import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 interface WorkspaceLayoutProps {
   children: React.ReactNode;
 }
 
-export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
+function WorkspaceLayoutContent({ children }: WorkspaceLayoutProps) {
   const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
@@ -55,5 +56,13 @@ export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function WorkspaceLayout({ children }: WorkspaceLayoutProps) {
+  return (
+    <ErrorBoundary>
+      <WorkspaceLayoutContent>{children}</WorkspaceLayoutContent>
+    </ErrorBoundary>
   );
 }

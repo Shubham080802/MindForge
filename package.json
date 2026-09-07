@@ -11,7 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "validate": "pnpm test && pnpm typecheck && pnpm lint && pnpm build",
     "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
     "db:studio": "prisma studio",
     "db:generate": "prisma generate"
   },
@@ -31,8 +33,6 @@
     "@radix-ui/react-tabs": "^1.1.0",
     "@radix-ui/react-toast": "^1.2.1",
     "@radix-ui/react-tooltip": "^1.1.2",
-    "@supabase/ssr": "^0.12.5",
-    "@supabase/supabase-js": "^2.115.0",
     "@types/nodemailer": "^8.0.1",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.3",
@@ -60,7 +60,6 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.48.0",
-    "@types/bcryptjs": "^3.0.0",
     "@types/node": "^22.13.10",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.0.10",

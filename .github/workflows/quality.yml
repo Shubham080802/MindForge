@@ -1,0 +1,57 @@
+name: Quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: mindforge
+          POSTGRES_PASSWORD: mindforge
+          POSTGRES_DB: mindforge
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U mindforge"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://mindforge:mindforge@localhost:5432/mindforge?schema=public
+      NEXTAUTH_URL: http://localhost:3003
+      NEXTAUTH_SECRET: ci-only-secret-that-is-longer-than-thirty-two-characters
+      OPENAI_API_KEY: ci-placeholder
+      EMAIL_SERVER_HOST: localhost
+      EMAIL_SERVER_PORT: "1025"
+      EMAIL_SERVER_USER: ci
+      EMAIL_SERVER_PASSWORD: ci
+      EMAIL_FROM: MindForge CI <ci@example.com>
+      NEXT_PUBLIC_SUPPORT_EMAIL: support@example.com
+      CRON_SECRET: ci-only-retention-secret
+      AUDIT_RETENTION_DAYS: "365"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm prisma migrate deploy
+      - run: pnpm test
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e

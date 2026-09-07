@@ -1,61 +1,57 @@
-# MindForge launch audit
+# MindForge product and launch audit
 
-Audited: 2026-09-06. The product had two incompatible implementations: a
-NextAuth + Prisma workspace and a Supabase + demo dashboard. The active launch
-path is now the NextAuth + Prisma workspace (`/` → sign-in → `/workspace`).
+Audited: 2026-09-07. Scope: product truth, user journeys, security, data,
+reliability, operations, testability, and deployment readiness.
 
-The implementation followed Matt Pocock's implementation, TDD, and parallel
-code-review workflows. Kun Chen's no-mistakes discipline supplied the public-
-seam testing, full validation gate, and push-safety checks; its pull-request
-step was intentionally omitted because this delivery was explicitly requested
-on `main` without a PR.
+## Executive assessment
 
-## Fixed in this hardening pass
+MindForge now has one supported application and identity model: Next.js +
+NextAuth + Prisma + PostgreSQL. The conflicting Supabase demo, routes, hooks,
+storage model, migration, dashboard, and dependencies were removed. The main
+learner journey—account, upload, session, contextual chat, study tools, speech,
+search, export, and deletion—is represented in the production stack.
 
-- Removed dangerous OAuth account linking and hide OAuth providers until their
-  credentials are configured.
-- Made registration verified: OTPs and password-reset tokens are hashed at rest;
-  reset links are emailed rather than written to application logs.
-- Enforced stronger, shared password and request validation.
-- Added same-origin checks to core browser mutations.
-- Added direct material ownership, stored source bytes, authorized downloads,
-  stable original filenames, and ownership checks when attaching uploads to a
-  session. This closes the previous cross-account material-attachment flaw.
-- Removed duplicate user prompts from the chat history sent to the model.
-- Disabled plaintext BYOK storage until a KMS/envelope-encryption design exists.
-- Added a database-backed readiness endpoint at `/api/health` and baseline
-  browser security headers.
-- Updated the theme package to a React 19-compatible release and supplied a
-  complete environment template.
+| Area | Status | Evidence |
+| --- | --- | --- |
+| Product truth | Ready | Public copy now describes only implemented capabilities; fake pricing, usage, collaboration, research, and local-processing claims were removed. |
+| Authentication | Ready | Verified registration, expiring single-use token digests, optional OAuth, same-origin mutations, and account-scoped queries. |
+| Data ownership | Ready for bounded-volume launch | Direct material ownership, private downloads, transactional attachment, cascading deletion, 10 MB file limit. |
+| Abuse protection | Ready when configured | Upstash distributed limits cover auth requests/attempts, uploads, AI, speech, and exports; production fails closed without Redis. |
+| Reliability | Ready when configured | Public database/config readiness, structured request-error events, optional monitoring webhook, audit-event persistence. |
+| Operations | Ready for operator sign-off | CI, additive migration, deployment/rollback, backup drill, incident response, and scheduled retention procedures are included. |
+| Legal/support | Ready for owner review | Privacy, Terms, Security, and Support surfaces are live; the operator must replace the example support address and approve the text. |
+| Automated checks | Ready | Behavioral unit tests, public browser smoke tests, optional authenticated staging flow, typecheck, lint, and production build. |
 
-## Launch blockers to resolve before taking payment or handling real learner data
+## Findings resolved
 
-1. **One back end only.** Retire the remaining Supabase/demo routes and the
-   `/dashboard` prototype after any demo users are migrated. Do not set
-   `NEXT_PUBLIC_DEMO_MODE=false` as a substitute for this cleanup: those legacy
-   routes use a separate identity system.
-2. **Apply schema safely.** The included Prisma migration is a baseline for a
-   new database. For an existing database, first migrate each material's owner
-   from its session or quarantine unattached rows; never invent ownership.
-3. **Durable object storage.** Database BLOB storage is a coherent MVP with the
-   current 10 MB limit, but move source files to private object storage before
-   high-volume usage. Keep the `userId` authorization seam at download time.
-4. **Abuse controls.** Configure a distributed rate limiter and an edge WAF for
-   sign-up, reset, upload, AI, and text-to-speech endpoints. In-memory limits
-   are not adequate in serverless production.
-5. **Operational controls.** Add error monitoring, structured audit logs,
-   database backups/restore drills, uptime checks against `/api/health`, and
-   a data-retention/deletion policy. Verify SMTP, OAuth redirect URLs, and all
-   production environment variables in a staging deploy.
-6. **Product truth.** Replace landing-page claims (voice languages, pricing,
-   user counts, sharing) with only capabilities that are metered, supported,
-   and documented. Add a real privacy policy, terms, support contact, and
-   incident-response process before public launch.
+1. Removed the second Supabase identity/data application and all demo-only routes.
+2. Protected `/library` and `/settings`; made `/api/health` genuinely public and machine-readable.
+3. Added distributed abuse limits behind one deep rate-limit module with production and development adapters.
+4. Added persisted audit events, structured request-error reporting, and an optional monitoring-webhook adapter.
+5. Added scheduled expiry cleanup and documented retention, deletion, backup restore, rollback, and incident procedures.
+6. Replaced unsupported product claims and dead links with working feature, legal, security, and support pages.
+7. Removed the misleading plaintext BYOK settings interface; server-owned OpenAI credentials remain the supported model.
+8. Added profile loading, functional theme selection, real sidebar identity, and post-deletion sign-out.
+9. Replaced demo E2E tests with production-path public and authenticated staging journeys.
+10. Removed a tracked local cookie jar and OS metadata files.
 
-## Verification gate
+## Deployment sign-off still required
 
-Run `pnpm install --frozen-lockfile`, `pnpm db:generate`, `pnpm typecheck`,
-`pnpm lint`, `pnpm build`, and an authenticated Playwright flow against a
-staging database. Test the unhappy paths: rejected uploads, cross-account
-material URLs, expired/used OTPs, expired reset links, deleted accounts, and a
-database outage returning HTTP 503 from `/api/health`.
+Code readiness cannot provision or legally approve external systems. Before
+opening production traffic, the operator must:
+
+1. Provision PostgreSQL with encryption, automated backups, and point-in-time recovery; apply migrations and complete a restore drill.
+2. Configure OpenAI, SMTP, Upstash Redis, HTTPS `NEXTAUTH_URL`, independent strong secrets, OAuth redirects if used, the support mailbox, and the monitoring destination.
+3. Run the authenticated Playwright journey against staging with disposable credentials. It intentionally skips when `E2E_EMAIL` and `E2E_PASSWORD` are absent.
+4. Configure the daily retention request and uptime alert against `/api/health`.
+5. Have the business owner or counsel approve Privacy and Terms and define named incident/on-call ownership.
+6. Keep the database-backed file store within the documented bounded-volume envelope; move source bytes to private object storage before raising upload limits or serving high volume.
+
+## Audit method
+
+The pass used Matt Pocock-style implementation, TDD, deep-module design, and
+two-axis review. Kun Chen’s no-mistakes rules supplied behavioral-test quality,
+documentation, validation, and push-safety requirements. Its AXI executable is
+not installed on this host, and its PR publication step conflicts with the
+explicit direct-to-`main`, no-PR delivery instruction, so those phases are run
+manually and reported transparently.

@@ -1,17 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
-import nodemailer from "nodemailer";
+import bcrypt from "bcryptjs";
+import { sendVerificationCode } from "@/lib/email";
+import { signupInput } from "@/lib/validation";
+import { assertSameOrigin } from "@/lib/request-guard";
+import { digestVerificationCode } from "@/lib/token-digest";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, name, password } = await request.json();
-
-    if (!email || !password) {
-      return NextResponse.json({ message: "Email and password are required" }, { status: 400 });
-    }
+    assertSameOrigin(request);
+    const parsed = signupInput.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ message: "Invalid registration details" }, { status: 400 });
+    const { email, name, password } = parsed.data;
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -19,12 +22,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "User with this email already exists" }, { status: 400 });
     }
 
-    // Generate 6-digit OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otp = crypto.randomInt(100_000, 1_000_000).toString();
+    const token = digestVerificationCode(email, otp);
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-    // Hash password
-    const bcrypt = await import("bcryptjs");
     const passwordHash = await bcrypt.hash(password, 12);
 
     // Delete any existing verification tokens for this email
@@ -33,7 +34,7 @@ export async function POST(request: NextRequest) {
     // Create verification token
     await prisma.emailVerificationToken.create({
       data: {
-        token: otp,
+        token,
         email,
         name,
         passwordHash,
@@ -41,37 +42,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Send email
-    const transporter = nodemailer.createTransport({
-      host: process.env.EMAIL_SERVER_HOST,
-      port: Number(process.env.EMAIL_SERVER_PORT),
-      secure: false,
-      auth: {
-        user: process.env.EMAIL_SERVER_USER,
-        pass: process.env.EMAIL_SERVER_PASSWORD,
-      },
-    });
-
-    await transporter.sendMail({
-      from: process.env.EMAIL_FROM,
-      to: email,
-      subject: "Your MindForge verification code",
-      html: `
-        <div style="font-family: system-ui, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-          <h1 style="color: #1a1a1a;">Verify your email</h1>
-          <p>Welcome to MindForge! Use the code below to complete your registration:</p>
-          <div style="background: #f3f4f6; border-radius: 8px; padding: 20px; text-align: center; margin: 20px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 4px; color: #1a1a1a;">${otp}</span>
-          </div>
-          <p style="color: #6b7280;">This code expires in 15 minutes.</p>
-          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;" />
-          <p style="color: #9ca3af; font-size: 12px;">If you didn't request this, please ignore this email.</p>
-        </div>
-      `,
-    });
+    await sendVerificationCode(email, otp);
 
     return NextResponse.json({ message: "Verification code sent to your email" });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Send OTP error:", error);
     return NextResponse.json({ message: "Failed to send verification code" }, { status: 500 });
   }

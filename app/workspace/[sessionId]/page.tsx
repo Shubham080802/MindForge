@@ -25,6 +25,7 @@ function formatSize(bytes: number): string {
 
 interface Material {
   id: string;
+  fileName: string;
   url: string;
   type: string;
   size: number;
@@ -134,10 +135,6 @@ export default function SessionPage() {
       setExportProgress({ active: false });
     }
   };
-
-  useEffect(() => {
-    fetchSession();
-  }, [sessionId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -682,7 +679,7 @@ function MaterialCard({ material, detailed = false, onClick }: { material: Mater
               {!isImage && !isPDF && <FileText className="h-5 w-5 text-blue-600" />}
             </div>
             <div className="min-w-0">
-              <p className="font-medium truncate text-sm">{material.url.split("/").pop() || "File"}</p>
+              <p className="font-medium truncate text-sm">{material.fileName}</p>
               <p className="text-xs text-muted-foreground">{formatSize(material.size)} · {material.mimeType}</p>
             </div>
           </div>

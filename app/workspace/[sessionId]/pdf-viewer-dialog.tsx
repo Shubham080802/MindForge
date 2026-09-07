@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 
 interface Material {
   id: string;
+  fileName: string;
   url: string;
   type: string;
   size: number;
@@ -36,7 +37,7 @@ export function PDFViewerDialog({ material, open, onOpenChange }: PDFViewerDialo
               {!material.mimeType.startsWith("image/") && material.mimeType !== "application/pdf" && <FileText className="h-5 w-5 text-blue-600" />}
             </div>
             <div className="min-w-0">
-              <DialogTitle className="truncate text-lg font-semibold">{material.url.split("/").pop() || "Document"}</DialogTitle>
+              <DialogTitle className="truncate text-lg font-semibold">{material.fileName}</DialogTitle>
               <p className="text-xs text-muted-foreground">{material.mimeType} · {Math.round(material.size / 1024)} KB</p>
             </div>
           </div>
@@ -58,9 +59,11 @@ export function PDFViewerDialog({ material, open, onOpenChange }: PDFViewerDialo
               sandbox="allow-scripts allow-same-origin allow-forms"
             />
           ) : material.mimeType.startsWith("image/") ? (
+            // The authenticated download route intentionally cannot be fetched by the image optimizer.
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={material.url}
-              alt={material.url.split("/").pop() || "Image"}
+              alt={material.fileName}
               className="w-full h-full object-contain p-4"
             />
           ) : (

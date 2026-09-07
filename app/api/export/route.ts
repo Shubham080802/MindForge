@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { requireMutation } from "@/lib/request-guard";
 
 export const runtime = "nodejs";
 
 async function generatePdf(
   title: string,
   createdAt: string,
-  materials: Array<{ url: string; type: string; size: number }>,
+  materials: Array<{ fileName: string; type: string; size: number }>,
   messages: Array<{ role: string; content: string; createdAt: string }>,
   toolResults: Record<string, any>
 ): Promise<Uint8Array> {
@@ -81,7 +80,7 @@ async function generatePdf(
   if (materials.length > 0) {
     addSectionHeader("Materials");
     materials.forEach((m, i) => {
-      const name = m.url.split("/").pop() || "Document";
+      const name = m.fileName;
       addText(`${i + 1}. ${name} (${m.type}, ${(m.size / 1024).toFixed(1)} KB)`, 11);
     });
     y -= 10;
@@ -131,10 +130,8 @@ async function generatePdf(
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireMutation(request);
+    if ("error" in auth) return auth.error;
 
     const { sessionId, format, content, toolResults, toolName } = await request.json();
 
@@ -143,7 +140,7 @@ export async function POST(request: NextRequest) {
     }
 
     const sessionData = await prisma.session.findFirst({
-      where: { id: sessionId, userId: session.user.id },
+      where: { id: sessionId, userId: auth.userId },
       include: { materials: true, messages: true },
     });
 
@@ -161,7 +158,7 @@ export async function POST(request: NextRequest) {
           createdAt: sessionData.createdAt,
         },
         materials: sessionData.materials.map((m) => ({
-          name: m.url.split("/").pop(),
+          name: m.fileName,
           type: m.type,
           size: m.size,
         })),
@@ -189,7 +186,7 @@ export async function POST(request: NextRequest) {
       if (sessionData.materials.length > 0) {
         md += "## Materials\n\n";
         sessionData.materials.forEach((m, i) => {
-          md += `${i + 1}. ${m.url.split("/").pop()} (${m.type}, ${(m.size / 1024).toFixed(1)} KB)\n`;
+          md += `${i + 1}. ${m.fileName} (${m.type}, ${(m.size / 1024).toFixed(1)} KB)\n`;
         });
         md += "\n";
       }
@@ -259,6 +256,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: "Invalid format" }, { status: 400 });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Export error:", error);
     return NextResponse.json({ message: "Failed to export" }, { status: 500 });
   }

@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
           title: { contains: query, mode: "insensitive" },
         },
         include: {
-          materials: { select: { id: true, type: true, url: true } },
+          materials: { select: { id: true, type: true, fileName: true } },
           _count: { select: { materials: true, messages: true } },
         },
         orderBy: { updatedAt: "desc" },
@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
           session: { userId: session.user.id },
           OR: [
             { extractedText: { contains: query, mode: "insensitive" } },
-            { url: { contains: query, mode: "insensitive" } },
+            { fileName: { contains: query, mode: "insensitive" } },
           ],
         },
         include: {
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
         return {
           type: "material",
           id: m.id,
-          title: m.url.split("/").pop() || "Document",
+          title: m.fileName,
           snippet,
           mimeType: m.mimeType,
           size: m.size,

@@ -84,6 +84,17 @@ export default function WorkspacePage() {
       }
 
       const { session } = await sessionRes.json();
+      
+      // Verify session exists before redirecting
+      let retries = 0;
+      const maxRetries = 5;
+      while (retries < maxRetries) {
+        const verifyRes = await fetch(`/api/sessions/${session.id}`, { credentials: "include" });
+        if (verifyRes.ok) break;
+        await new Promise(r => setTimeout(r, 200));
+        retries++;
+      }
+      
       router.push(`/workspace/${session.id}`);
       router.refresh();
     } catch (error) {

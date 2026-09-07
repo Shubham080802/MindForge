@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireMutation } from "@/lib/request-guard";
+import { internalError, requireMutation } from "@/lib/request-guard";
 
 export const runtime = "nodejs";
 
@@ -23,8 +23,6 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ message: "API key removed" });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Delete API key error:", error);
-    return NextResponse.json({ message: "Failed to remove API key" }, { status: 500 });
+    return internalError("Delete API key", error);
   }
 }

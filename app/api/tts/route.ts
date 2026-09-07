@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getOpenAI } from "@/lib/ai-client";
-import { requireMutation } from "@/lib/request-guard";
+import { internalError, requireMutation } from "@/lib/request-guard";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutation(request);
     if ("error" in auth) return auth.error;
+    await enforceRateLimit(request, "ai", auth.userId);
 
     const { text, voice, language } = await request.json();
 
@@ -59,8 +61,6 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("TTS error:", error);
-    return NextResponse.json({ message: "Failed to generate speech" }, { status: 500 });
+    return internalError("Text to speech", error);
   }
 }

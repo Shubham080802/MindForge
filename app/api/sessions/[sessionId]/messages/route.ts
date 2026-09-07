@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { getOpenAI } from "@/lib/ai-client";
-import { parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
+import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { sessionMessageInput } from "@/lib/validation";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { reportServerError } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -48,6 +50,7 @@ export async function POST(
   try {
     const auth = await requireMutation(request);
     if ("error" in auth) return auth.error;
+    await enforceRateLimit(request, "ai", auth.userId);
 
     const { sessionId } = await params;
     const { content, stream = false } = await parseJson(request, sessionMessageInput);
@@ -136,7 +139,7 @@ export async function POST(
 
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ message: assistantMessage, done: true })}\n\n`));
           } catch (aiError) {
-            console.error("OpenAI stream error:", aiError);
+            await reportServerError("OpenAI stream", aiError, { sessionId });
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Failed to generate response", done: true })}\n\n`));
           } finally {
             closeSSEStream(controller);
@@ -163,7 +166,7 @@ export async function POST(
 
       aiContent = completion.choices[0]?.message?.content || "I couldn't generate a response.";
     } catch (aiError) {
-      console.error("OpenAI error:", aiError);
+      await reportServerError("OpenAI completion", aiError, { sessionId });
       aiContent = "I encountered an error while generating a response. Please check your OpenAI API key and try again.";
     }
 
@@ -172,9 +175,7 @@ export async function POST(
 
     return NextResponse.json({ message: assistantMessage });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Send message error:", error);
-    return NextResponse.json({ message: "Failed to send message" }, { status: 500 });
+    return internalError("Send message", error);
   }
 }
 
@@ -195,8 +196,6 @@ export async function GET(
 
     return NextResponse.json({ messages });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Get messages error:", error);
-    return NextResponse.json({ message: "Failed to fetch messages" }, { status: 500 });
+    return internalError("Get messages", error);
   }
 }

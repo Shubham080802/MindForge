@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
+import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { sessionUpdateInput } from "@/lib/validation";
+import { recordAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -35,9 +36,7 @@ export async function GET(
 
     return NextResponse.json({ session: sessionData });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Get session error:", error);
-    return NextResponse.json({ message: "Failed to fetch session" }, { status: 500 });
+    return internalError("Get session", error);
   }
 }
 
@@ -54,12 +53,11 @@ export async function DELETE(
     await prisma.session.deleteMany({
       where: { id: sessionId, userId: auth.userId },
     });
+    await recordAudit({ action: "session.deleted", userId: auth.userId, targetType: "session", targetId: sessionId });
 
     return NextResponse.json({ message: "Session deleted" });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Delete session error:", error);
-    return NextResponse.json({ message: "Failed to delete session" }, { status: 500 });
+    return internalError("Delete session", error);
   }
 }
 
@@ -78,11 +76,10 @@ export async function PATCH(
       where: { id: sessionId, userId: auth.userId },
       data: { title },
     });
+    await recordAudit({ action: "session.renamed", userId: auth.userId, targetType: "session", targetId: sessionId });
 
     return NextResponse.json({ session: updated });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Update session error:", error);
-    return NextResponse.json({ message: "Failed to update session" }, { status: 500 });
+    return internalError("Update session", error);
   }
 }

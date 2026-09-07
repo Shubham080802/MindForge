@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireMutation } from "@/lib/request-guard";
+import { internalError, requireMutation } from "@/lib/request-guard";
 import { prepareMaterialBatch, validateMaterialBatch } from "@/lib/material-ingestion";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -9,6 +11,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutation(request);
     if ("error" in auth) return auth.error;
+    await enforceRateLimit(request, "upload", auth.userId);
 
     const formData = await request.formData();
     const files = formData.getAll("files").filter((value): value is File => value instanceof File);
@@ -30,10 +33,14 @@ export async function POST(request: NextRequest) {
       }
       return results;
     });
+    await recordAudit({
+      action: "material.uploaded",
+      userId: auth.userId,
+      targetType: "material_batch",
+      metadata: { count: uploadedMaterials.length, materialIds: uploadedMaterials.map((material) => material.id) },
+    });
     return NextResponse.json({ materials: uploadedMaterials }, { status: 201 });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Material upload failed", error);
-    return NextResponse.json({ message: "Upload failed. Please try a different file." }, { status: 500 });
+    return internalError("Material upload", error);
   }
 }

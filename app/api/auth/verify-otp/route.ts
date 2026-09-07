@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { verifyOtpInput } from "@/lib/validation";
 import { assertSameOrigin } from "@/lib/request-guard";
 import { digestVerificationCode } from "@/lib/token-digest";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
+import { reportServerError } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -12,6 +15,7 @@ export async function POST(request: NextRequest) {
     const parsed = verifyOtpInput.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ message: "Invalid verification code" }, { status: 400 });
     const { email, otp } = parsed.data;
+    await enforceRateLimit(request, "auth-attempt", email);
     const token = digestVerificationCode(email, otp);
 
     // Find valid token
@@ -45,6 +49,7 @@ export async function POST(request: NextRequest) {
 
     // Delete used token
     await prisma.emailVerificationToken.delete({ where: { id: verificationToken.id } });
+    await recordAudit({ action: "auth.account.created", userId: user.id, targetType: "user", targetId: user.id });
 
     return NextResponse.json({
       user: {
@@ -55,7 +60,7 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (error instanceof Response) return error;
-    console.error("Verify OTP error:", error);
+    await reportServerError("Verify account", error);
     return NextResponse.json({ message: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

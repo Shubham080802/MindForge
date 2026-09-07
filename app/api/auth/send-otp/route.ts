@@ -6,6 +6,9 @@ import { sendVerificationCode } from "@/lib/email";
 import { signupInput } from "@/lib/validation";
 import { assertSameOrigin } from "@/lib/request-guard";
 import { digestVerificationCode } from "@/lib/token-digest";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
+import { reportServerError } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -15,6 +18,7 @@ export async function POST(request: NextRequest) {
     const parsed = signupInput.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ message: "Invalid registration details" }, { status: 400 });
     const { email, name, password } = parsed.data;
+    await enforceRateLimit(request, "auth-request", email);
 
     // Check if user already exists
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -43,11 +47,12 @@ export async function POST(request: NextRequest) {
     });
 
     await sendVerificationCode(email, otp);
+    await recordAudit({ action: "auth.verification.sent" });
 
     return NextResponse.json({ message: "Verification code sent to your email" });
   } catch (error) {
     if (error instanceof Response) return error;
-    console.error("Send OTP error:", error);
+    await reportServerError("Send verification code", error);
     return NextResponse.json({ message: "Failed to send verification code" }, { status: 500 });
   }
 }

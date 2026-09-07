@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAppUser } from "@/lib/request-guard";
+import { internalError, requireAppUser } from "@/lib/request-guard";
 
 export const runtime = "nodejs";
 
@@ -23,7 +23,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ ma
       },
     });
   } catch (error) {
-    console.error("Material download failed", error);
-    return NextResponse.json({ message: "Material could not be downloaded" }, { status: 500 });
+    return internalError("Material download", error);
   }
 }

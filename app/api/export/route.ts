@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { requireMutation } from "@/lib/request-guard";
+import { internalError, requireMutation } from "@/lib/request-guard";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -132,6 +133,7 @@ export async function POST(request: NextRequest) {
   try {
     const auth = await requireMutation(request);
     if ("error" in auth) return auth.error;
+    await enforceRateLimit(request, "export", auth.userId);
 
     const { sessionId, format, content, toolResults, toolName } = await request.json();
 
@@ -256,8 +258,6 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: "Invalid format" }, { status: 400 });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Export error:", error);
-    return NextResponse.json({ message: "Failed to export" }, { status: 500 });
+    return internalError("Export", error);
   }
 }

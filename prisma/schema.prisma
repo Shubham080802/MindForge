@@ -21,6 +21,7 @@ model User {
   materials           Material[]
   accounts            Account[]
   passwordResetTokens PasswordResetToken[]
+  auditEvents         AuditEvent[]
 }
 
 model Account {
@@ -99,4 +100,19 @@ model EmailVerificationToken {
   passwordHash String
   expiresAt DateTime
   createdAt DateTime @default(now())
+}
+
+model AuditEvent {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  targetType String?
+  targetId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([createdAt])
 }

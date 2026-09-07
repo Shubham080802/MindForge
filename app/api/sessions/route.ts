@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { sessionCreateInput } from "@/lib/validation";
+import { recordAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
       }
       return created;
     });
+    await recordAudit({ action: "session.created", userId: auth.userId, targetType: "session", targetId: newSession.id });
 
     return NextResponse.json({
       session: {
@@ -65,7 +67,6 @@ export async function GET() {
 
     return NextResponse.json({ sessions });
   } catch (error) {
-    console.error("Get sessions error:", error);
-    return NextResponse.json({ message: "Failed to fetch sessions" }, { status: 500 });
+    return internalError("Get sessions", error);
   }
 }

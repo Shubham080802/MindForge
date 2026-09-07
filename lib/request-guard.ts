@@ -2,6 +2,7 @@ import { getServerSession } from "next-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, ZodSchema } from "zod";
 import { authOptions } from "@/lib/auth-options";
+import { reportServerError } from "@/lib/observability";
 
 /**
  * The single seam for authenticated, browser-initiated mutations. Keeping it
@@ -44,6 +45,6 @@ export function internalError(action: string, error: unknown) {
   if (error instanceof ZodError) {
     return NextResponse.json({ message: "Invalid request", issues: error.flatten().fieldErrors }, { status: 400 });
   }
-  console.error(`${action} failed`, error);
+  void reportServerError(action, error);
   return NextResponse.json({ message: "Request could not be completed" }, { status: 500 });
 }

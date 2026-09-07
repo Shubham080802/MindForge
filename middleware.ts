@@ -1,27 +1,23 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
+import { routeAccess } from "@/lib/route-access";
 
 export default withAuth(
   function middleware(req) {
     const isLoggedIn = !!req.nextauth.token;
-    const isOnAuth = req.nextUrl.pathname.startsWith("/auth");
-    const isOnWorkspace = req.nextUrl.pathname.startsWith("/workspace");
-    const isOnLibrary = req.nextUrl.pathname.startsWith("/library");
-    const isOnApi = req.nextUrl.pathname.startsWith("/api");
-    const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
-    const isAuthPage = ["/auth/signin", "/auth/signup", "/auth/forgot-password", "/auth/reset-password", "/auth/verify-request"].includes(req.nextUrl.pathname);
+    const access = routeAccess(req.nextUrl.pathname);
 
     // Allow access to auth pages even if logged in
-    if (isAuthPage && isLoggedIn) {
+    if (access.isAuthPage && isLoggedIn) {
       return NextResponse.next();
     }
 
     // Redirect other auth pages (callback, error, etc.) if logged in
-    if (isOnAuth && isLoggedIn && !isAuthPage) {
+    if (access.isAuthRoute && isLoggedIn && !access.isAuthPage) {
       return Response.redirect(new URL("/workspace", req.nextUrl));
     }
 
-    if ((isOnWorkspace || isOnLibrary || (isOnApi && !isAuthApi)) && !isLoggedIn) {
+    if (access.requiresAuthentication && !isLoggedIn) {
       const callbackUrl = encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search);
       return Response.redirect(new URL(`/auth/signin?callbackUrl=${callbackUrl}`, req.nextUrl));
     }
@@ -29,26 +25,25 @@ export default withAuth(
   {
     callbacks: {
       authorized: ({ token, req }) => {
-        const isOnAuth = req.nextUrl.pathname.startsWith("/auth");
-        const isOnWorkspace = req.nextUrl.pathname.startsWith("/workspace");
-        const isOnLibrary = req.nextUrl.pathname.startsWith("/library");
-        const isOnApi = req.nextUrl.pathname.startsWith("/api");
-        const isAuthApi = req.nextUrl.pathname.startsWith("/api/auth");
-        const isAuthPage = ["/auth/signin", "/auth/signup", "/auth/forgot-password", "/auth/reset-password", "/auth/verify-request"].includes(req.nextUrl.pathname);
-
-        // Allow auth pages without token
-        if (isAuthPage) return true;
-        
-        // Require token for workspace, library, and API
-        if (isOnWorkspace || isOnLibrary || (isOnApi && !isAuthApi)) {
-          return !!token;
-        }
-        return true;
+        const access = routeAccess(req.nextUrl.pathname);
+        return access.requiresAuthentication ? !!token : true;
       },
     },
   }
 );
 
 export const config = {
-  matcher: ["/workspace/:path*", "/api/:path*", "/auth/:path*"],
+  matcher: [
+    "/workspace/:path*",
+    "/library/:path*",
+    "/settings/:path*",
+    "/auth/:path*",
+    "/api/export",
+    "/api/materials/:path*",
+    "/api/search",
+    "/api/sessions/:path*",
+    "/api/study-tools/:path*",
+    "/api/tts",
+    "/api/user/:path*",
+  ],
 };

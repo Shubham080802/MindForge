@@ -5,6 +5,9 @@ import { sendPasswordReset } from "@/lib/email";
 import { forgotPasswordInput } from "@/lib/validation";
 import { assertSameOrigin } from "@/lib/request-guard";
 import { digestResetToken } from "@/lib/token-digest";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
+import { reportServerError } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -14,6 +17,7 @@ export async function POST(request: NextRequest) {
     const parsed = forgotPasswordInput.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ message: "Email is required" }, { status: 400 });
     const { email } = parsed.data;
+    await enforceRateLimit(request, "auth-request", email);
 
     const user = await prisma.user.findUnique({ where: { email } });
 
@@ -44,11 +48,12 @@ export async function POST(request: NextRequest) {
     const resetUrl = new URL("/auth/reset-password", appOrigin);
     resetUrl.searchParams.set("token", rawToken);
     await sendPasswordReset(email, resetUrl.toString());
+    await recordAudit({ action: "auth.password_reset.sent", userId: user.id, targetType: "user", targetId: user.id });
 
     return NextResponse.json({ message: "If an account exists, a password reset link has been sent to your email." });
   } catch (error) {
     if (error instanceof Response) return error;
-    console.error("Forgot password error:", error);
+    await reportServerError("Request password reset", error);
     return NextResponse.json({ message: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

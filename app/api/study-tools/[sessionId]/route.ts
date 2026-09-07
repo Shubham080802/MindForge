@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { getOpenAI } from "@/lib/ai-client";
-import { requireMutation } from "@/lib/request-guard";
+import { internalError, requireMutation } from "@/lib/request-guard";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -39,6 +40,7 @@ export async function POST(
   try {
     const auth = await requireMutation(request);
     if ("error" in auth) return auth.error;
+    await enforceRateLimit(request, "ai", auth.userId);
 
     const { sessionId } = await params;
     const { tool, content, targetLanguage } = await request.json();
@@ -98,8 +100,6 @@ export async function POST(
 
     return NextResponse.json({ result: parsedResult });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Study tool error:", error);
-    return NextResponse.json({ message: "Failed to process study tool" }, { status: 500 });
+    return internalError("Study tool", error);
   }
 }

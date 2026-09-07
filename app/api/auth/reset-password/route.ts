@@ -4,6 +4,9 @@ import bcrypt from "bcryptjs";
 import { resetPasswordInput } from "@/lib/validation";
 import { assertSameOrigin } from "@/lib/request-guard";
 import { digestResetToken } from "@/lib/token-digest";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
+import { reportServerError } from "@/lib/observability";
 
 export const runtime = "nodejs";
 
@@ -13,6 +16,7 @@ export async function POST(request: NextRequest) {
     const parsed = resetPasswordInput.safeParse(await request.json());
     if (!parsed.success) return NextResponse.json({ message: "Invalid password-reset request" }, { status: 400 });
     const { token: rawToken, password } = parsed.data;
+    await enforceRateLimit(request, "auth-attempt", rawToken);
     const token = digestResetToken(rawToken);
 
     // Find valid token
@@ -42,11 +46,12 @@ export async function POST(request: NextRequest) {
 
     // Delete used token
     await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
+    await recordAudit({ action: "auth.password_reset.completed", userId: resetToken.userId, targetType: "user", targetId: resetToken.userId });
 
     return NextResponse.json({ message: "Password has been reset successfully" });
   } catch (error) {
     if (error instanceof Response) return error;
-    console.error("Reset password error:", error);
+    await reportServerError("Complete password reset", error);
     return NextResponse.json({ message: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

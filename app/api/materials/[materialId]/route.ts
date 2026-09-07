@@ -1,50 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { assertTrustedOrigin, requireRateLimit, requireUser, responseFromError } from "@/lib/security";
+import { prisma } from "@/lib/prisma";
+import { internalError, requireMutation } from "@/lib/request-guard";
+import { recordAudit } from "@/lib/audit";
+
+export const runtime = "nodejs";
 
 export async function DELETE(
   request: NextRequest,
-  context: { params: Promise<{ materialId: string }> }
+  { params }: { params: Promise<{ materialId: string }> },
 ) {
   try {
-    assertTrustedOrigin(request);
-    const { materialId } = await context.params;
-    const { supabase, user } = await requireUser();
-    await requireRateLimit(user.id, "material-delete");
+    const auth = await requireMutation(request);
+    if ("error" in auth) return auth.error;
+    const { materialId } = await params;
 
-    if (!materialId || !/^[0-9a-f-]{36}$/i.test(materialId)) {
-      throw new Response("Invalid material identifier", { status: 400 });
-    }
+    const deleted = await prisma.material.deleteMany({ where: { id: materialId, userId: auth.userId } });
+    if (!deleted.count) return NextResponse.json({ message: "Material not found" }, { status: 404 });
 
-    const { data: material, error: fetchError } = await supabase
-      .from("materials")
-      .select("id, object_path")
-      .eq("id", materialId)
-      .eq("owner_id", user.id)
-      .single();
-
-    if (fetchError || !material) {
-      throw new Response("Material not found", { status: 404 });
-    }
-
-    if (material.object_path) {
-      await supabase.storage.from("study-materials").remove([material.object_path]);
-    }
-
-    const { error: deleteError } = await supabase
-      .from("materials")
-      .delete()
-      .eq("id", materialId)
-      .eq("owner_id", user.id);
-
-    if (deleteError) throw deleteError;
-
-    await supabase.from("audit_events").insert({
-      event_type: "material_deleted",
-      metadata: { material_id: materialId },
-    });
-
+    await recordAudit({ action: "material.deleted", userId: auth.userId, targetType: "material", targetId: materialId });
     return NextResponse.json({ success: true, deletedMaterialId: materialId });
   } catch (error) {
-    return responseFromError(error);
+    return internalError("Delete material", error);
   }
 }

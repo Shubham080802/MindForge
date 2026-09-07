@@ -1,13 +1,14 @@
 import crypto from "node:crypto";
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { isTrustedProxyHeader } from "@/lib/runtime-config";
 
 const POLICIES = {
-  "auth-request": { requests: 5, window: "15 m", windowMs: 15 * 60_000 },
-  "auth-attempt": { requests: 10, window: "15 m", windowMs: 15 * 60_000 },
-  upload: { requests: 20, window: "1 h", windowMs: 60 * 60_000 },
-  ai: { requests: 30, window: "1 m", windowMs: 60_000 },
-  export: { requests: 20, window: "1 h", windowMs: 60 * 60_000 },
+  "auth-request": { requests: 5, windowSeconds: 15 * 60 },
+  "auth-attempt": { requests: 10, windowSeconds: 15 * 60 },
+  upload: { requests: 20, windowSeconds: 60 * 60 },
+  ai: { requests: 30, windowSeconds: 60 },
+  export: { requests: 20, windowSeconds: 60 * 60 },
 } as const;
 
 export type RateLimitPolicy = keyof typeof POLICIES;
@@ -51,7 +52,7 @@ class UpstashRateLimitAdapter implements RateLimitAdapter {
       const config = POLICIES[policy];
       limiter = new Ratelimit({
         redis: this.redis,
-        limiter: Ratelimit.slidingWindow(config.requests, config.window),
+        limiter: Ratelimit.slidingWindow(config.requests, `${config.windowSeconds} s`),
         prefix: `mindforge:${policy}`,
         analytics: false,
       });
@@ -69,7 +70,7 @@ class DevelopmentRateLimitAdapter implements RateLimitAdapter {
     const cacheKey = `${policy}:${key}`;
     const now = Date.now();
     const current = this.entries.get(cacheKey);
-    const entry = !current || current.reset <= now ? { count: 0, reset: now + config.windowMs } : current;
+    const entry = !current || current.reset <= now ? { count: 0, reset: now + config.windowSeconds * 1_000 } : current;
     entry.count += 1;
     this.entries.set(cacheKey, entry);
     return { success: entry.count <= config.requests, reset: entry.reset };
@@ -92,8 +93,6 @@ function productionGate() {
   return gate;
 }
 
-const TRUSTED_PROXY_HEADERS = new Set(["x-forwarded-for", "x-real-ip", "cf-connecting-ip"]);
-
 type RateLimitHeaders = Pick<Headers, "get"> | Record<string, unknown>;
 
 function headerValue(headers: RateLimitHeaders | undefined, name: string) {
@@ -106,10 +105,10 @@ function headerValue(headers: RateLimitHeaders | undefined, name: string) {
 
 function configuredClientAddress(request: { headers?: RateLimitHeaders }) {
   const configured = process.env.TRUSTED_PROXY_HEADER?.toLowerCase();
-  if (process.env.NODE_ENV === "production" && (!configured || !TRUSTED_PROXY_HEADERS.has(configured))) {
+  if (process.env.NODE_ENV === "production" && !isTrustedProxyHeader(configured)) {
     throw new Response("Trusted proxy configuration is invalid", { status: 503 });
   }
-  const header = configured && TRUSTED_PROXY_HEADERS.has(configured) ? configured : "x-forwarded-for";
+  const header = isTrustedProxyHeader(configured) ? configured! : "x-forwarded-for";
   const value = headerValue(request.headers, header)?.split(",")[0]?.trim();
   return value || "unknown";
 }

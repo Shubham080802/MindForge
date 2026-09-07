@@ -26,9 +26,7 @@ export async function recordAudit(entry: AuditEntry) {
         metadata: entry.metadata,
       },
     });
-    return true;
   } catch (error) {
     await reportServerError("audit.write_failed", error, { action: entry.action });
-    return false;
   }
 }

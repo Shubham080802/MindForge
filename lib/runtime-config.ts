@@ -1,5 +1,11 @@
 type RuntimeEnvironment = Record<string, string | undefined>;
 
+export const TRUSTED_PROXY_HEADERS = ["x-forwarded-for", "x-real-ip", "cf-connecting-ip"] as const;
+
+export function isTrustedProxyHeader(value: string | undefined) {
+  return Boolean(value && TRUSTED_PROXY_HEADERS.includes(value.toLowerCase() as (typeof TRUSTED_PROXY_HEADERS)[number]));
+}
+
 const REQUIRED_PRODUCTION_VALUES = [
   "DATABASE_URL",
   "NEXTAUTH_URL",
@@ -29,7 +35,7 @@ export function runtimeReadiness(env: RuntimeEnvironment, production = env.NODE_
     if (env.NEXTAUTH_SECRET && env.NEXTAUTH_SECRET.length < 32) {
       issues.push("NEXTAUTH_SECRET must be at least 32 characters");
     }
-    if (env.TRUSTED_PROXY_HEADER && !["x-forwarded-for", "x-real-ip", "cf-connecting-ip"].includes(env.TRUSTED_PROXY_HEADER.toLowerCase())) {
+    if (env.TRUSTED_PROXY_HEADER && !isTrustedProxyHeader(env.TRUSTED_PROXY_HEADER)) {
       issues.push("TRUSTED_PROXY_HEADER must name a supported proxy-controlled header");
     }
   }

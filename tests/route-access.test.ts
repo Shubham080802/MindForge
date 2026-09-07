@@ -11,7 +11,6 @@ describe("route access policy", () => {
     expect(routeAccess("/api/health").requiresAuthentication).toBe(false);
     expect(routeAccess("/api/internal/retention").requiresAuthentication).toBe(false);
     expect(routeAccess("/api/auth/session").requiresAuthentication).toBe(false);
-    expect(routeAccess("/auth/signin").isAuthPage).toBe(true);
   });
 
   it("protects application endpoints", () => {

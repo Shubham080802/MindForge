@@ -1,14 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
+import { getOpenAI } from "@/lib/ai-client";
+import { requireMutation } from "@/lib/request-guard";
 
 export const runtime = "nodejs";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 const STUDY_TOOL_PROMPTS = {
   summary: `Create a concise, well-structured summary of the provided study materials. Include:
@@ -41,10 +37,8 @@ export async function POST(
   { params }: { params: Promise<{ sessionId: string }> }
 ) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireMutation(request);
+    if ("error" in auth) return auth.error;
 
     const { sessionId } = await params;
     const { tool, content, targetLanguage } = await request.json();
@@ -55,7 +49,7 @@ export async function POST(
 
     // Verify session ownership
     const sessionData = await prisma.session.findFirst({
-      where: { id: sessionId, userId: session.user.id },
+      where: { id: sessionId, userId: auth.userId },
       include: { materials: true },
     });
 
@@ -68,6 +62,7 @@ export async function POST(
     if (!context) {
       return NextResponse.json({ message: "No study materials with extractable text found" }, { status: 400 });
     }
+    const openai = getOpenAI();
 
     let systemPrompt = STUDY_TOOL_PROMPTS[tool as keyof typeof STUDY_TOOL_PROMPTS];
     
@@ -103,6 +98,7 @@ export async function POST(
 
     return NextResponse.json({ result: parsedResult });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Study tool error:", error);
     return NextResponse.json({ message: "Failed to process study tool" }, { status: 500 });
   }

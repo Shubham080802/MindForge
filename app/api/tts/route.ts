@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
 import OpenAI from "openai";
+import { getOpenAI } from "@/lib/ai-client";
+import { requireMutation } from "@/lib/request-guard";
 
 export const runtime = "nodejs";
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
 
 const VOICE_MAP: Record<string, OpenAI.Audio.SpeechCreateParams["voice"]> = {
   alloy: "alloy",
@@ -33,10 +29,8 @@ const LANG_VOICE_MAP: Record<string, OpenAI.Audio.SpeechCreateParams["voice"]> =
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireMutation(request);
+    if ("error" in auth) return auth.error;
 
     const { text, voice, language } = await request.json();
 
@@ -45,6 +39,7 @@ export async function POST(request: NextRequest) {
     }
 
     const selectedVoice = voice || LANG_VOICE_MAP[language || "en"] || "nova";
+    const openai = getOpenAI();
 
     const mp3 = await openai.audio.speech.create({
       model: "tts-1",
@@ -64,6 +59,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("TTS error:", error);
     return NextResponse.json({ message: "Failed to generate speech" }, { status: 500 });
   }

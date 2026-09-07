@@ -9,7 +9,18 @@ export default async function middleware(req: NextRequest) {
   if (!access.requiresAuthentication) return NextResponse.next();
 
   const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
-  if (token && typeof token.id === "string") {
+  const hasVersionedIdentity = token
+    && !token.revoked
+    && typeof token.id === "string"
+    && typeof token.sessionVersion === "number";
+
+  // API handlers perform the authoritative database-backed session check via
+  // requireAppUser. Avoid repeating that serial lookup in middleware.
+  if (hasVersionedIdentity && req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.next();
+  }
+
+  if (hasVersionedIdentity) {
     const current = await prisma.user.findUnique({
       where: { id: token.id },
       select: { sessionVersion: true },

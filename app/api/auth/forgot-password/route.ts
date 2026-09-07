@@ -1,16 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import crypto from "crypto";
+import { sendPasswordReset } from "@/lib/email";
+import { forgotPasswordInput } from "@/lib/validation";
+import { assertSameOrigin } from "@/lib/request-guard";
+import { digestResetToken } from "@/lib/token-digest";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email } = await request.json();
-
-    if (!email || typeof email !== "string") {
-      return NextResponse.json({ message: "Email is required" }, { status: 400 });
-    }
+    assertSameOrigin(request);
+    const parsed = forgotPasswordInput.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ message: "Email is required" }, { status: 400 });
+    const { email } = parsed.data;
 
     const user = await prisma.user.findUnique({ where: { email } });
 
@@ -20,7 +23,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate secure token
-    const token = crypto.randomBytes(32).toString("hex");
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const token = digestResetToken(rawToken);
     const expiresAt = new Date(Date.now() + 3600000); // 1 hour
 
     // Delete any existing reset tokens for this user
@@ -35,13 +39,15 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // TODO: Send email with reset link
-    // For now, log the reset link (in production, send via email service)
-    const resetUrl = `${process.env.NEXTAUTH_URL}/auth/reset-password?token=${token}`;
-    console.log(`Password reset link for ${email}: ${resetUrl}`);
+    const appOrigin = process.env.NEXTAUTH_URL;
+    if (!appOrigin) throw new Error("NEXTAUTH_URL must be configured before sending password-reset links");
+    const resetUrl = new URL("/auth/reset-password", appOrigin);
+    resetUrl.searchParams.set("token", rawToken);
+    await sendPasswordReset(email, resetUrl.toString());
 
     return NextResponse.json({ message: "If an account exists, a password reset link has been sent to your email." });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Forgot password error:", error);
     return NextResponse.json({ message: "Something went wrong. Please try again." }, { status: 500 });
   }

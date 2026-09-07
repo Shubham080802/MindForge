@@ -41,6 +41,17 @@ edge overwrites so callers cannot choose their own rate-limit identity.
 
 ## Release gate
 
+For a guided, resumable Vercel production setup, run:
+
+```bash
+./scripts/launch-wizard.sh
+```
+
+The wizard links the existing project, captures secrets in the ignored `.env`,
+guides managed Postgres and Redis provisioning, applies migrations, deploys,
+runs staging E2E, and records local operational owners. Read the deployment
+runbook before launching.
+
 ```bash
 corepack pnpm install --frozen-lockfile
 corepack pnpm audit:prod

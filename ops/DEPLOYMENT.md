@@ -4,7 +4,7 @@
 
 1. Use Node.js 20, pnpm 10, PostgreSQL 14+, HTTPS, and a deployment platform that preserves server-only environment variables.
 2. Set every required value in `.env.example`. Production readiness intentionally returns HTTP 503 when database access or required configuration is missing.
-3. Configure Upstash Redis for distributed rate limits and a support mailbox monitored by a human.
+3. Configure Upstash Redis for distributed rate limits. Set `TRUSTED_PROXY_HEADER` to a client-IP header that your edge overwrites rather than passes through, and monitor the support mailbox.
 4. Use a managed PostgreSQL plan with encrypted storage, point-in-time recovery, automated backups, and tested restore access.
 
 ## Release
@@ -19,7 +19,7 @@ corepack pnpm lint
 corepack pnpm build
 ```
 
-Deploy the immutable build, then require `/api/health` to return HTTP 200 before shifting traffic. Run `PLAYWRIGHT_BASE_URL=https://staging.example.com E2E_EMAIL=... E2E_PASSWORD=... corepack pnpm test:e2e` with a disposable verified learner.
+Deploy the immutable build, then require `/api/health` to return HTTP 200 before shifting traffic. Run `PLAYWRIGHT_BASE_URL=https://staging.example.com E2E_EMAIL=... E2E_PASSWORD=... corepack pnpm test:e2e:staging` with a disposable verified learner.
 
 ## Scheduled retention
 

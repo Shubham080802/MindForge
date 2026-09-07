@@ -36,18 +36,21 @@ corepack pnpm dev
 Open `http://localhost:3000`. In development, rate limiting uses an in-process
 adapter when Upstash is not configured. Production fails closed when distributed
 abuse protection is missing.
+In production, `TRUSTED_PROXY_HEADER` must name a client-IP header that your
+edge overwrites so callers cannot choose their own rate-limit identity.
 
 ## Release gate
 
 ```bash
 corepack pnpm install --frozen-lockfile
+corepack pnpm audit:prod
 corepack pnpm db:generate
 corepack pnpm prisma migrate deploy
 corepack pnpm test
 corepack pnpm typecheck
 corepack pnpm lint
 corepack pnpm build
-corepack pnpm test:e2e
+corepack pnpm test:e2e:public
 ```
 
 For the authenticated staging flow, provide a disposable verified learner:
@@ -56,7 +59,7 @@ For the authenticated staging flow, provide a disposable verified learner:
 PLAYWRIGHT_BASE_URL=https://staging.example.com \
 E2E_EMAIL=learner@example.com \
 E2E_PASSWORD='staging-password' \
-corepack pnpm test:e2e
+corepack pnpm test:e2e:staging
 ```
 
 `GET /api/health` is public and returns HTTP 200 only when PostgreSQL and the

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,6 +38,7 @@ jobs:
       NEXT_PUBLIC_SUPPORT_EMAIL: support@example.com
       CRON_SECRET: ci-only-retention-secret
       AUDIT_RETENTION_DAYS: "365"
+      TRUSTED_PROXY_HEADER: x-forwarded-for
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -47,6 +49,7 @@ jobs:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm audit:prod
       - run: pnpm db:generate
       - run: pnpm prisma migrate deploy
       - run: pnpm test
@@ -54,4 +57,25 @@ jobs:
       - run: pnpm lint
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
-      - run: pnpm test:e2e
+      - run: pnpm test:e2e:public
+
+  staging-auth:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      PLAYWRIGHT_BASE_URL: ${{ vars.STAGING_BASE_URL }}
+      E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.0.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e:staging

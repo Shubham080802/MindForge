@@ -19,3 +19,9 @@ test("readiness is public and machine readable", async ({ request }) => {
   expect([200, 503]).toContain(response.status());
   await expect(response.json()).resolves.toMatchObject({ checks: { database: expect.any(String), configuration: expect.any(String) } });
 });
+
+test("protected API routes reject anonymous requests without redirecting", async ({ request }) => {
+  const response = await request.get("/api/sessions");
+  expect(response.status()).toBe(401);
+  await expect(response.json()).resolves.toEqual({ message: "Unauthorized" });
+});

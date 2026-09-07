@@ -20,7 +20,7 @@ search, export, and deletion—is represented in the production stack.
 | Reliability | Ready when configured | Public database/config readiness, structured request-error events, optional monitoring webhook, audit-event persistence. |
 | Operations | Ready for operator sign-off | CI, additive migration, deployment/rollback, backup drill, incident response, and scheduled retention procedures are included. |
 | Legal/support | Ready for owner review | Privacy, Terms, Security, and Support surfaces are live; the operator must replace the example support address and approve the text. |
-| Automated checks | Ready | Behavioral unit tests, public browser smoke tests, optional authenticated staging flow, typecheck, lint, and production build. |
+| Automated checks | Ready for public gate | Behavioral unit tests, required public browser smoke tests, production dependency audit, typecheck, lint, and production build. The authenticated staging gate is deliberately separate and fails when credentials are absent. |
 
 ## Findings resolved
 
@@ -41,8 +41,8 @@ Code readiness cannot provision or legally approve external systems. Before
 opening production traffic, the operator must:
 
 1. Provision PostgreSQL with encryption, automated backups, and point-in-time recovery; apply migrations and complete a restore drill.
-2. Configure OpenAI, SMTP, Upstash Redis, HTTPS `NEXTAUTH_URL`, independent strong secrets, OAuth redirects if used, the support mailbox, and the monitoring destination.
-3. Run the authenticated Playwright journey against staging with disposable credentials. It intentionally skips when `E2E_EMAIL` and `E2E_PASSWORD` are absent.
+2. Configure OpenAI, SMTP, Upstash Redis, HTTPS `NEXTAUTH_URL`, a proxy-overwritten client-IP header, independent strong secrets, OAuth redirects if used, the support mailbox, and the monitoring destination.
+3. Configure the GitHub `staging` environment with `STAGING_BASE_URL`, `E2E_EMAIL`, and `E2E_PASSWORD`, then run the explicit authenticated workflow-dispatch gate. It fails rather than skips when any value is absent.
 4. Configure the daily retention request and uptime alert against `/api/health`.
 5. Have the business owner or counsel approve Privacy and Terms and define named incident/on-call ownership.
 6. Keep the database-backed file store within the documented bounded-volume envelope; move source bytes to private object storage before raising upload limits or serving high volume.

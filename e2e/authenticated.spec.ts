@@ -1,8 +1,6 @@
 import { expect, test } from "@playwright/test";
 
 test("authenticated learner can create and manage a study session", async ({ page }) => {
-  test.skip(!process.env.E2E_EMAIL || !process.env.E2E_PASSWORD, "Set disposable staging credentials to run the authenticated flow");
-
   await page.goto("/auth/signin");
   await page.getByLabel("Email").fill(process.env.E2E_EMAIL!);
   await page.getByLabel("Password").fill(process.env.E2E_PASSWORD!);

@@ -40,11 +40,11 @@ export function invalidRequest(error: unknown) {
   return NextResponse.json({ message: "Invalid request" }, { status: 400 });
 }
 
-export function internalError(action: string, error: unknown) {
+export async function internalError(action: string, error: unknown) {
   if (error instanceof Response) return error;
   if (error instanceof ZodError) {
     return NextResponse.json({ message: "Invalid request", issues: error.flatten().fieldErrors }, { status: 400 });
   }
-  void reportServerError(action, error);
+  await reportServerError(action, error);
   return NextResponse.json({ message: "Request could not be completed" }, { status: 500 });
 }

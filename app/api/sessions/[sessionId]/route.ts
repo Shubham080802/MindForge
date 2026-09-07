@@ -50,9 +50,10 @@ export async function DELETE(
 
     const { sessionId } = await params;
 
-    await prisma.session.deleteMany({
+    const deleted = await prisma.session.deleteMany({
       where: { id: sessionId, userId: auth.userId },
     });
+    if (!deleted.count) return NextResponse.json({ message: "Session not found" }, { status: 404 });
     await recordAudit({ action: "session.deleted", userId: auth.userId, targetType: "session", targetId: sessionId });
 
     return NextResponse.json({ message: "Session deleted" });

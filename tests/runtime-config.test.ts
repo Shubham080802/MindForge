@@ -14,6 +14,7 @@ const productionEnv = {
   EMAIL_FROM: "MindForge <hello@example.com>",
   UPSTASH_REDIS_REST_URL: "https://redis.example.com",
   UPSTASH_REDIS_REST_TOKEN: "configured-at-runtime",
+  TRUSTED_PROXY_HEADER: "x-forwarded-for",
   NEXT_PUBLIC_SUPPORT_EMAIL: "support@example.com",
   CRON_SECRET: "configured-at-runtime",
 };
@@ -24,10 +25,16 @@ describe("runtime readiness", () => {
   });
 
   it("reports unsafe or incomplete production configuration", () => {
-    const result = runtimeReadiness({ ...productionEnv, NEXTAUTH_URL: "http://example.com", CRON_SECRET: "" });
+    const result = runtimeReadiness({
+      ...productionEnv,
+      NEXTAUTH_URL: "http://example.com",
+      CRON_SECRET: "",
+      TRUSTED_PROXY_HEADER: "client-ip",
+    });
     expect(result.ready).toBe(false);
     expect(result.issues).toContain("NEXTAUTH_URL must use HTTPS in production");
     expect(result.issues).toContain("CRON_SECRET is required");
+    expect(result.issues).toContain("TRUSTED_PROXY_HEADER must name a supported proxy-controlled header");
   });
 
   it("rejects half-configured OAuth providers", () => {

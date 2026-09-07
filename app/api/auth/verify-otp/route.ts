@@ -38,17 +38,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Verification code has expired. Please request a new one." }, { status: 400 });
     }
 
-    // Create user
-    const user = await prisma.user.create({
-      data: {
-        email: verificationToken.email,
-        name: verificationToken.name,
-        passwordHash: verificationToken.passwordHash,
-      },
+    const user = await prisma.$transaction(async (tx) => {
+      const consumed = await tx.emailVerificationToken.deleteMany({
+        where: {
+          id: verificationToken.id,
+          token,
+          email,
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (consumed.count !== 1) return null;
+      return tx.user.create({
+        data: {
+          email: verificationToken.email,
+          name: verificationToken.name,
+          passwordHash: verificationToken.passwordHash,
+        },
+      });
     });
-
-    // Delete used token
-    await prisma.emailVerificationToken.delete({ where: { id: verificationToken.id } });
+    if (!user) {
+      return NextResponse.json({ message: "Invalid or expired verification code" }, { status: 400 });
+    }
     await recordAudit({ action: "auth.account.created", userId: user.id, targetType: "user", targetId: user.id });
 
     return NextResponse.json({

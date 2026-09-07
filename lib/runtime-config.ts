@@ -12,6 +12,7 @@ const REQUIRED_PRODUCTION_VALUES = [
   "EMAIL_FROM",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
+  "TRUSTED_PROXY_HEADER",
   "NEXT_PUBLIC_SUPPORT_EMAIL",
   "CRON_SECRET",
 ] as const;
@@ -27,6 +28,9 @@ export function runtimeReadiness(env: RuntimeEnvironment, production = env.NODE_
     }
     if (env.NEXTAUTH_SECRET && env.NEXTAUTH_SECRET.length < 32) {
       issues.push("NEXTAUTH_SECRET must be at least 32 characters");
+    }
+    if (env.TRUSTED_PROXY_HEADER && !["x-forwarded-for", "x-real-ip", "cf-connecting-ip"].includes(env.TRUSTED_PROXY_HEADER.toLowerCase())) {
+      issues.push("TRUSTED_PROXY_HEADER must name a supported proxy-controlled header");
     }
   }
 

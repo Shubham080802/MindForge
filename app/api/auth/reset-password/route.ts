@@ -35,17 +35,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Reset token has expired. Please request a new one." }, { status: 400 });
     }
 
-    // Hash new password
     const passwordHash = await bcrypt.hash(password, 12);
-
-    // Update user password
-    await prisma.user.update({
-      where: { id: resetToken.userId },
-      data: { passwordHash },
+    const consumed = await prisma.$transaction(async (tx) => {
+      const deleted = await tx.passwordResetToken.deleteMany({
+        where: { id: resetToken.id, token, expiresAt: { gt: new Date() } },
+      });
+      if (deleted.count !== 1) return false;
+      await tx.user.update({
+        where: { id: resetToken.userId },
+        data: { passwordHash },
+      });
+      return true;
     });
-
-    // Delete used token
-    await prisma.passwordResetToken.delete({ where: { id: resetToken.id } });
+    if (!consumed) {
+      return NextResponse.json({ message: "Invalid or expired reset token" }, { status: 400 });
+    }
     await recordAudit({ action: "auth.password_reset.completed", userId: resetToken.userId, targetType: "user", targetId: resetToken.userId });
 
     return NextResponse.json({ message: "Password has been reset successfully" });

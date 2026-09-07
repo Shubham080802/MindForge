@@ -6,6 +6,7 @@ import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { emailSchema } from "@/lib/validation";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 const providers: NextAuthOptions["providers"] = [
   CredentialsProvider({
@@ -14,10 +15,17 @@ const providers: NextAuthOptions["providers"] = [
       email: { label: "Email", type: "email" },
       password: { label: "Password", type: "password" },
     },
-    async authorize(credentials) {
+    async authorize(credentials, request) {
       const parsed = emailSchema.safeParse(credentials?.email);
       const password = typeof credentials?.password === "string" ? credentials.password : "";
       if (!parsed.success || !password) return null;
+
+      try {
+        await enforceRateLimit(request, "auth-attempt", parsed.data);
+      } catch (error) {
+        if (error instanceof Response && error.status === 429) return null;
+        throw error;
+      }
 
       const user = await prisma.user.findUnique({ where: { email: parsed.data } });
       if (!user?.passwordHash || !(await bcrypt.compare(password, user.passwordHash))) return null;

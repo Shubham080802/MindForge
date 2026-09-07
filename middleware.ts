@@ -1,49 +1,27 @@
-import { withAuth } from "next-auth/middleware";
-import { NextResponse } from "next/server";
+import { getToken } from "next-auth/jwt";
+import { NextRequest, NextResponse } from "next/server";
 import { routeAccess } from "@/lib/route-access";
 
-export default withAuth(
-  function middleware(req) {
-    const isLoggedIn = !!req.nextauth.token;
-    const access = routeAccess(req.nextUrl.pathname);
+export default async function middleware(req: NextRequest) {
+  const access = routeAccess(req.nextUrl.pathname);
+  if (!access.requiresAuthentication) return NextResponse.next();
 
-    // Allow access to auth pages even if logged in
-    if (access.isAuthPage && isLoggedIn) {
-      return NextResponse.next();
-    }
+  const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+  if (token) return NextResponse.next();
 
-    // Redirect other auth pages (callback, error, etc.) if logged in
-    if (access.isAuthRoute && isLoggedIn && !access.isAuthPage) {
-      return Response.redirect(new URL("/workspace", req.nextUrl));
-    }
-
-    if (access.requiresAuthentication && !isLoggedIn) {
-      const callbackUrl = encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search);
-      return Response.redirect(new URL(`/auth/signin?callbackUrl=${callbackUrl}`, req.nextUrl));
-    }
-  },
-  {
-    callbacks: {
-      authorized: ({ token, req }) => {
-        const access = routeAccess(req.nextUrl.pathname);
-        return access.requiresAuthentication ? !!token : true;
-      },
-    },
+  if (req.nextUrl.pathname.startsWith("/api/")) {
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
-);
+
+  const callbackUrl = encodeURIComponent(req.nextUrl.pathname + req.nextUrl.search);
+  return NextResponse.redirect(new URL(`/auth/signin?callbackUrl=${callbackUrl}`, req.nextUrl));
+}
 
 export const config = {
   matcher: [
     "/workspace/:path*",
     "/library/:path*",
     "/settings/:path*",
-    "/auth/:path*",
-    "/api/export",
-    "/api/materials/:path*",
-    "/api/search",
-    "/api/sessions/:path*",
-    "/api/study-tools/:path*",
-    "/api/tts",
-    "/api/user/:path*",
+    "/api/:path*",
   ],
 };

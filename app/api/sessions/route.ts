@@ -1,48 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
+import { sessionCreateInput } from "@/lib/validation";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireMutation(request);
+    if ("error" in auth) return auth.error;
 
-    const body = await request.json();
-    const { title, initialQuery, materialIds } = body;
-
-    if (!title || !title.trim()) {
-      return NextResponse.json({ message: "Title required" }, { status: 400 });
-    }
-
-    const newSession = await prisma.session.create({
-      data: {
-        userId: session.user.id,
-        title: title.trim(),
-      },
-    });
+    const { title, initialQuery, materialIds } = await parseJson(request, sessionCreateInput);
 
     if (materialIds?.length) {
-      await prisma.material.updateMany({
-        where: { id: { in: materialIds } },
-        data: { sessionId: newSession.id },
+      const available = await prisma.material.count({
+        where: { id: { in: materialIds }, userId: auth.userId, sessionId: null },
       });
+      if (available !== materialIds.length) {
+        return NextResponse.json({ message: "One or more materials are unavailable." }, { status: 400 });
+      }
     }
-
-    // Save initial query as first user message if provided
-    if (initialQuery?.trim()) {
-      await prisma.message.create({
-        data: {
-          sessionId: newSession.id,
-          role: "user",
-          content: initialQuery.trim(),
-        },
-      });
-    }
+    const newSession = await prisma.$transaction(async (tx) => {
+      const created = await tx.session.create({ data: { userId: auth.userId, title } });
+      if (materialIds?.length) {
+        const attached = await tx.material.updateMany({
+          where: { id: { in: materialIds }, userId: auth.userId, sessionId: null },
+          data: { sessionId: created.id },
+        });
+        if (attached.count !== materialIds.length) throw new Error("Material attachment changed during session creation");
+      }
+      if (initialQuery) {
+        await tx.message.create({ data: { sessionId: created.id, role: "user", content: initialQuery } });
+      }
+      return created;
+    });
 
     return NextResponse.json({
       session: {
@@ -52,24 +43,21 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("Create session error:", error);
-    return NextResponse.json({ message: "Failed to create session" }, { status: 500 });
+    return internalError("Create session", error);
   }
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireAppUser();
+    if ("error" in auth) return auth.error;
 
     const sessions = await prisma.session.findMany({
-      where: { userId: session.user.id },
+      where: { userId: auth.userId },
       orderBy: { createdAt: "desc" },
       include: {
         materials: {
-          select: { id: true, url: true, type: true, size: true, mimeType: true, createdAt: true },
+          select: { id: true, fileName: true, url: true, type: true, size: true, mimeType: true, createdAt: true },
         },
         _count: { select: { messages: true, materials: true } },
       },

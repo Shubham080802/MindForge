@@ -1,19 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { verifyOtpInput } from "@/lib/validation";
+import { assertSameOrigin } from "@/lib/request-guard";
+import { digestVerificationCode } from "@/lib/token-digest";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, otp } = await request.json();
-
-    if (!email || !otp) {
-      return NextResponse.json({ message: "Email and OTP are required" }, { status: 400 });
-    }
+    assertSameOrigin(request);
+    const parsed = verifyOtpInput.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ message: "Invalid verification code" }, { status: 400 });
+    const { email, otp } = parsed.data;
+    const token = digestVerificationCode(email, otp);
 
     // Find valid token
     const verificationToken = await prisma.emailVerificationToken.findUnique({
-      where: { token: otp },
+      where: { token },
     });
 
     if (!verificationToken) {
@@ -51,6 +54,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Verify OTP error:", error);
     return NextResponse.json({ message: "Something went wrong. Please try again." }, { status: 500 });
   }

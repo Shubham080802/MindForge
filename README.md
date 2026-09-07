@@ -1,123 +1,70 @@
 # MindForge
 
-A private AI-powered study workspace. Upload your notes, ask questions grounded in your materials, and generate adaptive practice quizzes. Your data stays yours.
+MindForge is a private AI study workspace. Learners create a session, upload
+source material, chat with a tutor, generate study aids, listen to responses,
+and export their work.
 
-## Modes
+The supported launch path is **Next.js + NextAuth + Prisma + PostgreSQL**.
+Each source file has a direct owner, is stored privately, and is downloadable
+only by that owner. See [STARTUP_AUDIT.md](STARTUP_AUDIT.md) for the product and
+operations audit.
 
-- **Demo mode** (`DEMO_MODE = true` in `components/study-workspace.tsx` and `components/practice-panel.tsx`): no backend required. Runs entirely on the client with mock subjects, mock chat responses, image upload, and localStorage-persisted conversations. Great for quick previews and local development.
-- **Production mode** (`DEMO_MODE = false`): full server-backed experience using Supabase (Auth, storage, Postgres + pgvector) and the OpenAI Responses API, with Upstash Redis rate limiting.
+## Requirements
 
-> The demo build is what is deployed by default. Set `DEMO_MODE = false` and provide the env vars below before any production use.
+- Node.js 20 or newer
+- Corepack (for pnpm 10)
+- PostgreSQL 14 or newer
+- An OpenAI API key for AI, voice, and study-tool routes
+- SMTP credentials for verified registration and password reset
 
-## Architecture
-
-- **Next.js** (App Router) route handlers and server components.
-- **Supabase** provides Auth, private object storage, PostgreSQL, and RLS-enforced tenant isolation.
-- **pgvector** stores embeddings; retrieved passages are scoped by the caller's subject and `auth.uid()`.
-- **OpenAI Responses API** is called server-side with `store: false`; history lives in the app database.
-- **Upstash Redis** rate-limits mutations and inference per user.
-
-## Start (demo)
+## Local setup
 
 ```bash
-pnpm install
-pnpm dev
-# open http://localhost:3000 -> Open Workspace
+corepack pnpm install --frozen-lockfile
+cp .env.example .env.local
+corepack pnpm db:generate
+corepack pnpm prisma migrate dev
+corepack pnpm dev
 ```
 
-No environment variables are required for demo mode.
+Open `http://localhost:3000`. Verify readiness with
+`http://localhost:3000/api/health`; it returns `200` only when PostgreSQL is
+available.
 
-## Start (production)
+OAuth is optional. Google and GitHub sign-in are displayed only after both
+credentials for the provider are configured.
 
-1. Create a Supabase project and run `supabase/migrations/202608260001_initial.sql`.
-2. Create the private `study-materials` Storage bucket and configure an OAuth provider.
-3. Copy `.env.example` to `.env.local` and populate every value. The app fails closed when a security-critical value is missing.
-4. Set `DEMO_MODE = false` in the two components, then `pnpm dev`.
+## Deployment
 
-## Scripts
+1. Provision a managed PostgreSQL database with backups and point
+   `DATABASE_URL` at it.
+2. Set every core, OpenAI, and SMTP value in `.env.example` in your deployment
+   environment. Generate a unique `NEXTAUTH_SECRET` and set `NEXTAUTH_URL` to
+   the public HTTPS origin.
+3. From the release artifact, run `corepack pnpm prisma migrate deploy`.
+4. Build and start the app with `corepack pnpm build` and `corepack pnpm start`.
+5. Monitor `/api/health`, configure an edge WAF/rate limiter, and complete the
+   release gate below before inviting users.
 
-- `pnpm dev` / `pnpm build` / `pnpm start`
-- `pnpm lint` / `pnpm typecheck` (strict, `noUncheckedIndexedAccess` enabled)
+Source files are stored as PostgreSQL BLOBs in the MVP so they remain private
+and downloadable without a separate storage dependency. Keep the 10 MB upload
+limit; move files to private object storage before high-volume usage.
 
-## Security
+## Quality gate
 
-Server-only secrets, strict zod validation, object allow-lists and size caps, private storage, RLS on every table, origin checks on mutations, CSP/security headers, and distributed rate limiting. See the migration and route handlers for enforceable controls.
+```bash
+corepack pnpm typecheck
+corepack pnpm lint
+corepack pnpm build
+```
 
-Before production: configure Supabase SMTP/OAuth redirects, enable MFA, set a WAF/request-body cap, rotate secrets, and run threat modelling.
+Run authenticated end-to-end tests against a staging database with disposable
+SMTP credentials. Cover sign-up/OTP, reset links, uploads, cross-account
+material access, AI failures, account deletion, and health-check failure.
 
+## Current product boundary
 
-
----
-
-Quick Start# Clone the repo
-git clone https://github.com/Shubham080802/MindForge.git
-
-# Install dependencies
-pnpm install
-
-# Set up database (Docker)
-docker run -d --name mindforge-db \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=mindforge \
-  -p 5432:5432 postgres:16
-
-
-# Run migrations
-npx prisma db push
-
-
-# Start dev server
-pnpm dev --port 3003
-Environment Setup
-# Copy example env
-cp .env.example .env.local
-
-
-# Required vars for local dev:
-DATABASE_URL="postgresql://postgres:postgres@localhost:5432/mindforge?schema=public"
-NEXTAUTH_SECRET="dev-secret-change-in-production-min-32-chars-long"
-NEXTAUTH_URL="http://localhost:3003"
-Git Workflow
-# Check status
-git status
-
-
-# Stage all changes
-git add -A
-
-
-# Commit with conventional message
-git commit -m "feat: your feature description"
-
-
-# Push to main
-git push origin main
-Common Commands
-# Dev server
-pnpm dev --port 3003
-
-
-# Build
-pnpm build
-
-
-# Type check
-pnpm typecheck
-
-
-# Lint
-pnpm lint
-
-
-# Database
-npx prisma db push        # Push schema changes
-npx prisma studio         # Open Prisma Studio
-npx prisma generate       # Regenerate client
-
-
-# Git
-git log --oneline -10     # Recent commits
-git log --oneline --graph # Visual history
-git diff                  # Unstaged changes
-git diff --staged         # Staged changes
-
+`/dashboard`, `/api/subjects`, `/api/conversations`, and the Supabase code are
+a legacy demo prototype. They use a separate identity/data model and are not
+part of the supported launch path. Do not enable the legacy demo mode in a
+production deployment; retire it after any demo migration is complete.

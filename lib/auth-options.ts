@@ -7,7 +7,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { emailSchema } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
-import { isSessionVersionCurrent } from "@/lib/session-version";
+import { reconcileSessionIdentity, revokeSessionClaims } from "@/lib/session-version";
 
 const providers: NextAuthOptions["providers"] = [
   CredentialsProvider({
@@ -67,16 +67,22 @@ export const authOptions: NextAuthOptions = {
           where: { id: token.id },
           select: { sessionVersion: true },
         });
-        if (user && current) token.sessionVersion = current.sessionVersion;
-        if (!current || !isSessionVersionCurrent(token.sessionVersion, current.sessionVersion)) {
-          delete token.id;
-          delete token.sessionVersion;
+        const identity = reconcileSessionIdentity(token, current?.sessionVersion ?? null, Boolean(user));
+        if (identity) {
+          token.id = identity.id;
+          token.sessionVersion = identity.sessionVersion;
+          token.revoked = false;
+        } else {
+          revokeSessionClaims(token);
         }
       }
       return token;
     },
     async session({ session, token }) {
-      if (session.user && token.id) {
+      if (token.revoked || !token.id) {
+        return { ...session, user: undefined };
+      }
+      if (session.user) {
         session.user.id = token.id;
         session.user.name = token.name;
         session.user.email = token.email;

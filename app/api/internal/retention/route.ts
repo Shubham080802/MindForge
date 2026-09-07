@@ -38,3 +38,7 @@ export async function POST(request: NextRequest) {
     },
   });
 }
+
+// Vercel Cron invokes configured paths with GET and supplies CRON_SECRET as a
+// Bearer token. POST remains available for provider-neutral schedulers.
+export const GET = POST;

@@ -63,7 +63,8 @@ corepack pnpm test:e2e:staging
 ```
 
 `GET /api/health` is public and returns HTTP 200 only when PostgreSQL and the
-production runtime configuration are ready. The daily retention job calls
+production runtime configuration are ready. Vercel schedules the daily
+retention request from `vercel.json`; other schedulers may call
 `POST /api/internal/retention` with `Authorization: Bearer $CRON_SECRET`.
 
 ## Operations

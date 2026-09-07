@@ -23,7 +23,7 @@ Deploy the immutable build, then require `/api/health` to return HTTP 200 before
 
 ## Scheduled retention
 
-Call `POST /api/internal/retention` daily with `Authorization: Bearer $CRON_SECRET`. Alert on any non-200 response.
+The production Vercel deployment registers the daily `GET /api/internal/retention` schedule from `vercel.json`; Vercel supplies `Authorization: Bearer $CRON_SECRET`. Alert on any non-200 response. Other schedulers may call `POST` with the same authorization header.
 
 ## Rollback
 

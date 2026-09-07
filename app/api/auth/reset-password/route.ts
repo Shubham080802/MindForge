@@ -1,20 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { resetPasswordInput } from "@/lib/validation";
+import { assertSameOrigin } from "@/lib/request-guard";
+import { digestResetToken } from "@/lib/token-digest";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   try {
-    const { token, password } = await request.json();
-
-    if (!token || !password) {
-      return NextResponse.json({ message: "Token and password are required" }, { status: 400 });
-    }
-
-    if (password.length < 6) {
-      return NextResponse.json({ message: "Password must be at least 6 characters" }, { status: 400 });
-    }
+    assertSameOrigin(request);
+    const parsed = resetPasswordInput.safeParse(await request.json());
+    if (!parsed.success) return NextResponse.json({ message: "Invalid password-reset request" }, { status: 400 });
+    const { token: rawToken, password } = parsed.data;
+    const token = digestResetToken(rawToken);
 
     // Find valid token
     const resetToken = await prisma.passwordResetToken.findUnique({
@@ -46,6 +45,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ message: "Password has been reset successfully" });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Reset password error:", error);
     return NextResponse.json({ message: "Something went wrong. Please try again." }, { status: 500 });
   }

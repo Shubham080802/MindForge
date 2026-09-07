@@ -14,8 +14,8 @@ import { Loader2, Lock, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const resetPasswordSchema = z.object({
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  confirmPassword: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string().min(12, "Password must be at least 12 characters"),
+  confirmPassword: z.string().min(12, "Password must be at least 12 characters"),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don&apos;t match",
   path: ["confirmPassword"],

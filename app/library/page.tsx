@@ -10,6 +10,7 @@ import { Search, Plus, FileText, MessageSquare, Calendar, ChevronRight, Filter, 
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
+import { useKeyboardShortcuts, useGlobalShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 interface Session {
   id: string;
@@ -51,6 +52,37 @@ export default function LibraryPage() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchType, setSearchType] = useState<"all" | "sessions" | "materials" | "messages">("all");
   const searchDebounceRef = useRef<NodeJS.Timeout | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcuts
+  useKeyboardShortcuts([
+    {
+      key: "k",
+      metaKey: true,
+      action: () => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      },
+      description: "Focus search",
+    },
+    {
+      key: "/",
+      metaKey: true,
+      action: () => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      },
+      description: "Focus search (alt)",
+    },
+    {
+      key: "Escape",
+      action: () => {
+        setSearchQuery("");
+        searchInputRef.current?.blur();
+      },
+      description: "Clear search",
+    },
+  ]);
 
   useEffect(() => {
     fetchSessions();
@@ -204,6 +236,7 @@ export default function LibraryPage() {
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder={globalSearch ? "Search sessions, materials, messages..." : "Search sessions..."}
                 value={searchQuery}

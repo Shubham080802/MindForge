@@ -15,6 +15,7 @@ import { PDFViewerDialog } from "./pdf-viewer-dialog";
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { useKeyboardShortcuts, useSessionShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -68,6 +69,12 @@ export default function SessionPage() {
   const [exportFormat, setExportFormat] = useState<"markdown" | "json" | "pdf" | null>(null);
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
   const [exportProgress, setExportProgress] = useState<{ active: boolean; format?: string }>({ active: false });
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keyboard shortcuts for session page
+  useKeyboardShortcuts(
+    useSessionShortcuts(textareaRef, () => sendMessage({ preventDefault: () => {} } as React.FormEvent), () => speakLastMessage(), () => router.push("/workspace"))
+  );
 
   const generateStudyTool = async (tool: string) => {
     setIsGenerating(true);
@@ -152,6 +159,13 @@ export default function SessionPage() {
   useEffect(() => {
     fetchSession();
   }, [fetchSession]);
+
+  const speakLastMessage = () => {
+    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
+    if (lastAssistantMessage) {
+      speakMessage(lastAssistantMessage.id, lastAssistantMessage.content);
+    }
+  };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -455,6 +469,7 @@ export default function SessionPage() {
               <div className="p-4">
                 <form onSubmit={sendMessage} className="flex gap-2">
                   <Textarea
+                    ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="Ask a question about your materials..."

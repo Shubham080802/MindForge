@@ -18,6 +18,7 @@ model User {
   createdAt           DateTime  @default(now())
   updatedAt           DateTime  @updatedAt
   sessions            Session[]
+  materials           Material[]
   accounts            Account[]
   passwordResetTokens PasswordResetToken[]
 }
@@ -64,14 +65,21 @@ model Message {
 
 model Material {
   id            String   @id @default(cuid())
+  userId        String
   sessionId     String?
+  fileName      String
   type          String
   url           String
   mimeType      String
   size          Int
+  fileContent   Bytes?
   extractedText String?  @db.Text
   createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   session       Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([sessionId])
 }
 
 model PasswordResetToken {

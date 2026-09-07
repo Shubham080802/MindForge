@@ -146,12 +146,17 @@ export default function SessionPage() {
   const fetchSession = useCallback(async () => {
     try {
       const res = await fetch(`/api/sessions/${sessionId}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch session");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: `HTTP ${res.status}` }));
+        throw new Error(errorData.message || `Failed to fetch session (${res.status})`);
+      }
       const data = await res.json();
       setSession(data.session);
       setMessages(data.session.messages || []);
     } catch (error) {
       console.error("Fetch session error:", error);
+      // Don't redirect immediately - show error instead
+      alert(`Failed to load session: ${error instanceof Error ? error.message : "Unknown error"}`);
       router.push("/workspace");
     }
   }, [sessionId, router]);

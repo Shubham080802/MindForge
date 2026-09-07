@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { parseJson, requireMutation } from "@/lib/request-guard";
+import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { profileUpdateInput } from "@/lib/validation";
 
 export const runtime = "nodejs";
+
+export async function GET() {
+  try {
+    const auth = await requireAppUser();
+    if ("error" in auth) return auth.error;
+    const user = await prisma.user.findUnique({
+      where: { id: auth.userId },
+      select: { id: true, name: true, email: true, image: true, language: true },
+    });
+    if (!user) return NextResponse.json({ message: "User not found" }, { status: 404 });
+    return NextResponse.json({ user });
+  } catch (error) {
+    return internalError("Get profile", error);
+  }
+}
 
 export async function PATCH(request: NextRequest) {
   try {
@@ -24,8 +39,6 @@ export async function PATCH(request: NextRequest) {
 
     return NextResponse.json({ user });
   } catch (error) {
-    if (error instanceof Response) return error;
-    console.error("Update profile error:", error);
-    return NextResponse.json({ message: "Failed to update profile" }, { status: 500 });
+    return internalError("Update profile", error);
   }
 }

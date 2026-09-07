@@ -533,7 +533,7 @@ export default function SessionPage() {
               <StudyToolCard
                 icon={<Languages className="h-6 w-6" />}
                 title="Multilingual Explanation"
-                description="Get explanations in 50+ languages with voice"
+                description="Translate your material into a selected language"
                 action="Translate"
                 onClick={() => generateStudyTool("translate")}
               />

@@ -1,37 +1,48 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth-options";
 import { prisma } from "@/lib/prisma";
+import { internalError, requireAppUser } from "@/lib/request-guard";
 
 export const runtime = "nodejs";
 
+const SEARCH_TYPES = new Set(["all", "sessions", "materials", "messages"]);
+
+type SearchResult = {
+  type: "session" | "material" | "message";
+  id: string;
+  title?: string;
+  snippet: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+  [key: string]: unknown;
+};
+
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-    }
+    const auth = await requireAppUser();
+    if ("error" in auth) return auth.error;
 
     const { searchParams } = new URL(request.url);
     const query = searchParams.get("q")?.trim();
-    const type = searchParams.get("type") || "all"; // all, sessions, materials, messages
-    const limit = parseInt(searchParams.get("limit") || "20");
-    const offset = parseInt(searchParams.get("offset") || "0");
+    const type = searchParams.get("type") || "all";
+    const limit = Number(searchParams.get("limit") || "20");
+    const offset = Number(searchParams.get("offset") || "0");
+
+    if (!SEARCH_TYPES.has(type) || !Number.isInteger(limit) || limit < 1 || limit > 50 || !Number.isInteger(offset) || offset < 0) {
+      return NextResponse.json({ message: "Invalid search parameters" }, { status: 400 });
+    }
 
     if (!query) {
       return NextResponse.json({ results: [], total: 0 });
     }
 
-    const searchTerm = `%${query}%`;
-
-    let sessionResults: any[] = [];
-    let materialResults: any[] = [];
-    let messageResults: any[] = [];
+    let sessionResults: SearchResult[] = [];
+    let materialResults: SearchResult[] = [];
+    let messageResults: SearchResult[] = [];
 
     if (type === "all" || type === "sessions") {
       const sessions = await prisma.session.findMany({
         where: {
-          userId: session.user.id,
+          userId: auth.userId,
           title: { contains: query, mode: "insensitive" },
         },
         include: {
@@ -58,7 +69,7 @@ export async function GET(request: NextRequest) {
     if (type === "all" || type === "materials") {
       const materials = await prisma.material.findMany({
         where: {
-          session: { userId: session.user.id },
+          userId: auth.userId,
           OR: [
             { extractedText: { contains: query, mode: "insensitive" } },
             { fileName: { contains: query, mode: "insensitive" } },
@@ -99,7 +110,7 @@ export async function GET(request: NextRequest) {
     if (type === "all" || type === "messages") {
       const messages = await prisma.message.findMany({
         where: {
-          session: { userId: session.user.id },
+          session: { userId: auth.userId },
           content: { contains: query, mode: "insensitive" },
         },
         include: {
@@ -150,7 +161,6 @@ export async function GET(request: NextRequest) {
       type,
     });
   } catch (error) {
-    console.error("Search error:", error);
-    return NextResponse.json({ message: "Search failed" }, { status: 500 });
+    return internalError("Search", error);
   }
 }

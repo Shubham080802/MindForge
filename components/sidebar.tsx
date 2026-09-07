@@ -4,11 +4,10 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Plus, MessageSquare, History, ChevronLeft, ChevronRight } from "lucide-react";
-import { formatRelativeTime, generateSessionTitle } from "@/lib/utils";
+import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
+import { formatRelativeTime } from "@/lib/utils";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 interface SessionItem {
   id: string;
@@ -33,6 +32,9 @@ export function Sidebar({
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
+  const { data: account } = useSession();
+  const displayName = account?.user?.name || "Learner";
+  const initial = displayName.trim().charAt(0).toUpperCase() || "L";
   return (
     <aside
       className={cn(
@@ -117,12 +119,12 @@ export function Sidebar({
       <div className="border-t p-4">
         <div className={cn("flex items-center gap-3", collapsed && "justify-center")}>
           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <span className="text-primary text-sm font-medium">U</span>
+            <span className="text-primary text-sm font-medium">{initial}</span>
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">User</p>
-              <p className="text-xs text-muted-foreground truncate">user@example.com</p>
+              <p className="text-sm font-medium truncate">{displayName}</p>
+              <p className="text-xs text-muted-foreground truncate">{account?.user?.email || "Signed in"}</p>
             </div>
           )}
         </div>

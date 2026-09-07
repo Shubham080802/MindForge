@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
       if (deleted.count !== 1) return false;
       await tx.user.update({
         where: { id: resetToken.userId },
-        data: { passwordHash },
+        data: { passwordHash, sessionVersion: { increment: 1 } },
       });
       return true;
     });

@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { emailSchema } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { isSessionVersionCurrent } from "@/lib/session-version";
 
 const providers: NextAuthOptions["providers"] = [
   CredentialsProvider({
@@ -60,6 +61,17 @@ export const authOptions: NextAuthOptions = {
         token.name = user.name;
         token.email = user.email;
         token.picture = user.image;
+      }
+      if (token.id) {
+        const current = await prisma.user.findUnique({
+          where: { id: token.id },
+          select: { sessionVersion: true },
+        });
+        if (user && current) token.sessionVersion = current.sessionVersion;
+        if (!current || !isSessionVersionCurrent(token.sessionVersion, current.sessionVersion)) {
+          delete token.id;
+          delete token.sessionVersion;
+        }
       }
       return token;
     },

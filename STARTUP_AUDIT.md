@@ -14,7 +14,7 @@ search, export, and deletion—is represented in the production stack.
 | Area | Status | Evidence |
 | --- | --- | --- |
 | Product truth | Ready | Public copy now describes only implemented capabilities; fake pricing, usage, collaboration, research, and local-processing claims were removed. |
-| Authentication | Ready | Verified registration, expiring single-use token digests, optional OAuth, same-origin mutations, and account-scoped queries. |
+| Authentication | Ready | Verified registration, expiring single-use token digests, optional OAuth, same-origin mutations, account-scoped queries, and password-reset/account-deletion session revocation. |
 | Data ownership | Ready for bounded-volume launch | Direct material ownership, private downloads, transactional attachment, cascading deletion, 10 MB file limit. |
 | Abuse protection | Ready when configured | Upstash distributed limits cover auth requests/attempts, uploads, AI, speech, and exports; production fails closed without Redis. |
 | Reliability | Ready when configured | Public database/config readiness, structured request-error events, optional monitoring webhook, audit-event persistence. |
@@ -34,6 +34,7 @@ search, export, and deletion—is represented in the production stack.
 8. Added profile loading, functional theme selection, real sidebar identity, and post-deletion sign-out.
 9. Replaced demo E2E tests with production-path public and authenticated staging journeys.
 10. Removed a tracked local cookie jar and OS metadata files.
+11. Revoked stateless sessions after password reset or account deletion and prevented shared caching of private generated speech.
 
 ## Deployment sign-off still required
 

@@ -21,6 +21,11 @@ describe("runtime readiness", () => {
     expect(runtimeReadiness(productionEnv).ready).toBe(true);
   });
 
+  it("accepts GitHub support as the production fallback", () => {
+    const { NEXT_PUBLIC_SUPPORT_EMAIL: _supportEmail, ...environment } = productionEnv;
+    expect(runtimeReadiness(environment).ready).toBe(true);
+  });
+
   it("reports unsafe or incomplete production configuration", () => {
     const result = runtimeReadiness({
       ...productionEnv,

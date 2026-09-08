@@ -1,7 +1,7 @@
 # MindForge
 
 MindForge is a private, source-grounded AI study workspace built with Next.js,
-Clerk, Prisma, PostgreSQL, OpenAI, and Upstash Redis.
+Clerk, Prisma, PostgreSQL, Google Gemini, and Upstash Redis.
 
 ## Product capabilities
 
@@ -20,7 +20,7 @@ Clerk, Prisma, PostgreSQL, OpenAI, and Upstash Redis.
 - Corepack and pnpm 10
 - PostgreSQL 14+
 - Clerk application credentials
-- OpenAI API credentials
+- Google AI Studio API credentials
 - Upstash Redis credentials for production abuse protection
 
 ## Local development

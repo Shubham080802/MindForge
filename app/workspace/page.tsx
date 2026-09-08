@@ -270,6 +270,11 @@ export default function WorkspacePage() {
             "Analyze & Start Session"
           )}
         </Button>
+        <p className="text-center text-xs leading-relaxed text-muted-foreground">
+          AI requests send your prompt and relevant extracted material to Gemini&apos;s free tier,
+          where Google may use submitted content to improve its products. See the Privacy Policy
+          before submitting sensitive material.
+        </p>
       </form>
 
       <div className="grid gap-4 sm:grid-cols-3">

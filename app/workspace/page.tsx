@@ -193,7 +193,12 @@ export default function WorkspacePage() {
                     : "border-border hover:border-primary/50"
                 )}
               >
-                <input {...getInputProps({ id: "study-materials" })} />
+                <input
+                  {...getInputProps({
+                    id: "study-materials",
+                    "aria-label": "Attach Files (Optional)",
+                  })}
+                />
                 <div className="flex flex-col items-center gap-3">
                   <Upload className="h-10 w-10 text-muted-foreground" />
                   <div>

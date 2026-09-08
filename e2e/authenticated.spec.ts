@@ -23,7 +23,9 @@ test("authenticated learner can create and manage a study session", async ({ pag
 
   await page.getByLabel("Your Question / Topic").fill("Explain this short biology note");
   await page.getByLabel("Attach Files (Optional)").setInputFiles(studySource);
-  await page.getByRole("button", { name: "Analyze & Start Session" }).click();
+  const analyzeButton = page.getByRole("button", { name: "Analyze & Start Session" });
+  await expect(analyzeButton, "Study services must be healthy before the authenticated journey can continue").toBeEnabled({ timeout: 5_000 });
+  await analyzeButton.click();
   await expect(page).toHaveURL(/\/workspace\//);
 
   await page.getByRole("button", { name: "New Session" }).click();

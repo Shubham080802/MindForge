@@ -20,7 +20,7 @@ const features = [
   {
     icon: Mic,
     title: "Voice playback",
-    description: "Generate natural OpenAI speech for supported study responses and download your session or generated study aids for offline review.",
+    description: "Listen with your browser's built-in speech engine and download sessions or generated study aids for offline review.",
   },
 ];
 

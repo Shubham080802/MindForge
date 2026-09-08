@@ -5,7 +5,7 @@ const capabilities = [
   [FileSearch, "Material extraction", "Extract text from PDF, DOCX, Markdown, plain text, and common image formats using OCR."],
   [Sparkles, "Contextual tutor", "Ask questions against the material and conversation history stored in a private study session."],
   [BookOpen, "Study tools", "Generate summaries, key concepts, flashcards, quizzes, study plans, and translations."],
-  [Mic, "Speech", "Convert supported responses to OpenAI-generated speech directly from the workspace."],
+  [Mic, "Speech", "Listen to supported responses using your browser's built-in speech engine."],
   [Download, "Exports", "Download source files and export sessions or individual study-tool results."],
   [ShieldCheck, "Owned data", "Every session and material lookup is scoped to the signed-in account."],
 ] as const;

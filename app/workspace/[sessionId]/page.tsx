@@ -256,54 +256,31 @@ export default function SessionPage() {
     }
   };
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const speakMessage = async (messageId: string, text: string) => {
-    if (speakingMessageId === messageId && audioRef.current?.paused === false) {
-      audioRef.current.pause();
-      audioRef.current = null;
+  const speakMessage = (messageId: string, text: string) => {
+    if (!("speechSynthesis" in window)) return;
+
+    if (speakingMessageId === messageId) {
+      window.speechSynthesis.cancel();
+      speechRef.current = null;
       setSpeakingMessageId(null);
       return;
     }
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
+    window.speechSynthesis.cancel();
 
+    const utterance = new SpeechSynthesisUtterance(text.slice(0, 4096));
+    speechRef.current = utterance;
     setSpeakingMessageId(messageId);
 
-    try {
-      const res = await fetch("/api/tts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ text: text.slice(0, 4096) }),
-      });
-
-      if (!res.ok) throw new Error("TTS failed");
-
-      const blob = await res.blob();
-      const audioUrl = URL.createObjectURL(blob);
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
-
-      audio.onended = () => {
-        setSpeakingMessageId(null);
-        URL.revokeObjectURL(audioUrl);
-        audioRef.current = null;
-      };
-      audio.onerror = () => {
-        setSpeakingMessageId(null);
-        URL.revokeObjectURL(audioUrl);
-        audioRef.current = null;
-      };
-
-      await audio.play();
-    } catch (error) {
-      console.error("TTS error:", error);
+    const finish = () => {
+      if (speechRef.current === utterance) speechRef.current = null;
       setSpeakingMessageId(null);
-    }
+    };
+    utterance.onend = finish;
+    utterance.onerror = finish;
+    window.speechSynthesis.speak(utterance);
   };
 
   const formatSize = (bytes: number) => {
@@ -487,7 +464,7 @@ export default function SessionPage() {
                   </Button>
                 </form>
                 <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Powered by AI · Responses based on your uploaded materials
+                  Gemini free tier · Relevant material is sent to Google and may be used to improve its products
                 </p>
               </div>
             </div>

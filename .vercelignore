@@ -1,0 +1,14 @@
+# Product audit working files are source references, not runtime assets.
+work/**
+
+# Repository and local dependency/build state are never deployment inputs.
+.git/
+.next/
+node_modules/
+.vercel/
+
+# Local-only reports and test artifacts.
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo

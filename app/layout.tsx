@@ -32,6 +32,20 @@ export default function RootLayout({
           signUpUrl="/auth/signup"
           signInFallbackRedirectUrl="/workspace"
           signUpFallbackRedirectUrl="/workspace"
+          localization={{
+            signIn: {
+              start: {
+                title: "Sign in to MindForge",
+                subtitle: "Welcome back. Sign in to continue studying.",
+              },
+            },
+            signUp: {
+              start: {
+                title: "Create your MindForge account",
+                subtitle: "Start a private, source-grounded study workspace.",
+              },
+            },
+          }}
         >
           <ErrorBoundary>
             <Providers>{children}</Providers>

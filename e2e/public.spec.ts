@@ -14,6 +14,14 @@ test("public product and legal routes are usable", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Security", exact: true })).toBeVisible();
 });
 
+test("Clerk sign-in uses MindForge product branding", async ({ page }) => {
+  await page.goto("/auth/signin");
+
+  await expect(page.getByText("MindForge", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sign in to MindForge" })).toBeVisible();
+  await expect(page.getByText("Sign in to My Application")).toHaveCount(0);
+});
+
 test("readiness is public and machine readable", async ({ request }) => {
   const response = await request.get("/api/health");
   expect([200, 503]).toContain(response.status());

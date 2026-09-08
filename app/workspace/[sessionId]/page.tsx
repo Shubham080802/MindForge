@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, MoreHorizontal, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Share2, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Upload, Eye, FileSearch } from "lucide-react";
+import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Eye, FileSearch } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { PDFViewerDialog } from "./pdf-viewer-dialog";
@@ -291,9 +291,6 @@ export default function SessionPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="hidden sm:flex">
-              <Share2 className="h-4 w-4" />
-            </Button>
             {exportProgress.active && (
               <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-lg text-sm text-primary">
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -332,12 +329,6 @@ export default function SessionPage() {
               )}
             </ScrollArea>
 
-            <div className="p-4 border-t">
-              <Button variant="outline" className="w-full" size="sm">
-                <Upload className="mr-2 h-4 w-4" />
-                Add More Files
-              </Button>
-            </div>
           </aside>
         )}
 
@@ -389,33 +380,6 @@ export default function SessionPage() {
                         <span>AI is thinking...</span>
                       </div>
                     )}
-                    {studyToolResult && (
-                      <div className="mt-6 p-4 bg-muted/50 rounded-lg border">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="font-semibold capitalize">{studyToolResult.tool} Result</h3>
-                          <div className="flex items-center gap-2">
-                            <Button variant="ghost" size="sm" onClick={() => handleExport("pdf", studyToolResult.tool)} disabled={exportProgress.active}>
-                              <FileText className="h-4 w-4" />
-                              <span className="hidden sm:inline">PDF</span>
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleExport("markdown", studyToolResult.tool)} disabled={exportProgress.active}>
-                              <FileDown className="h-4 w-4" />
-                              <span className="hidden sm:inline">MD</span>
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleExport("json", studyToolResult.tool)} disabled={exportProgress.active}>
-                              <FileText className="h-4 w-4" />
-                              <span className="hidden sm:inline">JSON</span>
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setStudyToolResult(null)} disabled={exportProgress.active}>
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="prose prose-sm max-w-none">
-                          <pre className="whitespace-pre-wrap text-sm font-mono bg-muted p-4 rounded">{JSON.stringify(studyToolResult.result, null, 2)}</pre>
-                        </div>
-                      </div>
-                    )}
                   </>
                 )}
                 <div ref={messagesEndRef} />
@@ -433,7 +397,7 @@ export default function SessionPage() {
                     className="flex-1 resize-none min-h-[44px] max-h-32"
                     disabled={isLoading}
                   />
-                  <Button type="submit" size="lg" disabled={!input.trim() || isLoading}>
+                  <Button type="submit" size="lg" aria-label="Send message" disabled={!input.trim() || isLoading}>
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
@@ -469,6 +433,7 @@ export default function SessionPage() {
                 description="Create a concise summary of all your materials"
                 action="Generate"
                 onClick={() => generateStudyTool("summary")}
+                disabled={isGenerating}
               />
               <StudyToolCard
                 icon={<BookOpen className="h-6 w-6" />}
@@ -476,6 +441,7 @@ export default function SessionPage() {
                 description="Extract important terms, definitions, and concepts"
                 action="Extract"
                 onClick={() => generateStudyTool("concepts")}
+                disabled={isGenerating}
               />
               <StudyToolCard
                 icon={<MessageSquare className="h-6 w-6" />}
@@ -483,6 +449,7 @@ export default function SessionPage() {
                 description="Generate quiz questions to test your understanding"
                 action="Create Quiz"
                 onClick={() => generateStudyTool("quiz")}
+                disabled={isGenerating}
               />
               <StudyToolCard
                 icon={<Languages className="h-6 w-6" />}
@@ -490,6 +457,7 @@ export default function SessionPage() {
                 description="Translate your material into a selected language"
                 action="Translate"
                 onClick={() => generateStudyTool("translate")}
+                disabled={isGenerating}
               />
               <StudyToolCard
                 icon={<FileDown className="h-6 w-6" />}
@@ -498,6 +466,39 @@ export default function SessionPage() {
                 action="Export"
                 onClick={() => setExportFormat("markdown")}
               />
+              {isGenerating && (
+                <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/40 p-6 text-muted-foreground" role="status">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Generating study tool…</span>
+                </div>
+              )}
+              {studyToolResult && (
+                <div className="rounded-lg border bg-muted/50 p-4">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h3 className="font-semibold capitalize">{studyToolResult.tool} Result</h3>
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" onClick={() => handleExport("pdf", studyToolResult.tool)} disabled={exportProgress.active}>
+                        <FileText className="h-4 w-4" />
+                        <span className="hidden sm:inline">PDF</span>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleExport("markdown", studyToolResult.tool)} disabled={exportProgress.active}>
+                        <FileDown className="h-4 w-4" />
+                        <span className="hidden sm:inline">MD</span>
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleExport("json", studyToolResult.tool)} disabled={exportProgress.active}>
+                        <FileText className="h-4 w-4" />
+                        <span className="hidden sm:inline">JSON</span>
+                      </Button>
+                      <Button variant="ghost" size="sm" aria-label="Close study tool result" onClick={() => setStudyToolResult(null)} disabled={exportProgress.active}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="prose prose-sm max-w-none">
+                    <pre className="whitespace-pre-wrap rounded bg-muted p-4 font-mono text-sm">{JSON.stringify(studyToolResult.result, null, 2)}</pre>
+                  </div>
+                </div>
+              )}
               {exportFormat && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setExportFormat(null)}>
                   <div className="bg-card rounded-lg p-4 w-full max-w-sm shadow-lg" onClick={(e) => e.stopPropagation()}>
@@ -592,13 +593,20 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
               variant="ghost"
               size="icon"
               className="h-6 w-6 p-0"
+              aria-label={speakingId === message.id ? "Stop reading response" : "Read response aloud"}
               onClick={() => onSpeak(message.id, message.content)}
             >
               {speakingId === message.id ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
             </Button>
           )}
           {!isUser && (
-            <Button variant="ghost" size="icon" className="h-6 w-6 p-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 p-0"
+              aria-label="Copy response"
+              onClick={() => navigator.clipboard.writeText(message.content)}
+            >
               <Copy className="h-4 w-4" />
             </Button>
           )}
@@ -637,11 +645,6 @@ function MaterialCard({ material, detailed = false, onClick }: { material: Mater
               <p className="text-xs text-muted-foreground">{formatSize(material.size)} · {material.mimeType}</p>
             </div>
           </div>
-          {detailed && (
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); }}>
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </CardHeader>
       {detailed && material.extractedText && (
@@ -650,11 +653,13 @@ function MaterialCard({ material, detailed = false, onClick }: { material: Mater
             {material.extractedText.slice(0, 500)}{material.extractedText.length > 500 ? "..." : ""}
           </div>
           <div className="flex gap-2 mt-3">
-            <Button variant="outline" size="sm">
-              <FileDown className="mr-1 h-3 w-3" />
-              Download
+            <Button variant="outline" size="sm" asChild>
+              <a href={material.url} download onClick={(event) => event.stopPropagation()}>
+                <FileDown className="mr-1 h-3 w-3" />
+                Download
+              </a>
             </Button>
-            <Button variant="outline" size="sm" onClick={(e) => { e.stopPropagation(); }}>
+            <Button variant="outline" size="sm" onClick={(event) => { event.stopPropagation(); onClick?.(); }}>
               <Edit className="mr-1 h-3 w-3" />
               View Text
             </Button>
@@ -665,7 +670,7 @@ function MaterialCard({ material, detailed = false, onClick }: { material: Mater
   );
 }
 
-function StudyToolCard({ icon, title, description, action, onClick }: { icon: React.ReactNode; title: string; description: string; action: string; onClick: () => void }) {
+function StudyToolCard({ icon, title, description, action, onClick, disabled = false }: { icon: React.ReactNode; title: string; description: string; action: string; onClick: () => void; disabled?: boolean }) {
   return (
     <Card>
       <CardContent className="pt-6">
@@ -679,7 +684,7 @@ function StudyToolCard({ icon, title, description, action, onClick }: { icon: Re
               <p className="text-sm text-muted-foreground">{description}</p>
             </div>
           </div>
-          <Button onClick={onClick}>{action}</Button>
+          <Button onClick={onClick} disabled={disabled}>{action}</Button>
         </div>
       </CardContent>
     </Card>

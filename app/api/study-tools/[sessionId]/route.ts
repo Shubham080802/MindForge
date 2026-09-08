@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { getAIChatModel, getAIClient } from "@/lib/ai-client";
-import { internalError, requireMutation } from "@/lib/request-guard";
+import { internalError, parseJson, requireMutation } from "@/lib/request-guard";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { studyToolInput } from "@/lib/validation";
+import { getStudyLanguage } from "@/lib/study-languages";
 
 export const runtime = "nodejs";
 
@@ -43,11 +45,7 @@ export async function POST(
     await enforceRateLimit(request, "ai", auth.userId);
 
     const { sessionId } = await params;
-    const { tool, content, targetLanguage } = await request.json();
-
-    if (!tool || !["summary", "concepts", "quiz", "translate"].includes(tool)) {
-      return NextResponse.json({ message: "Invalid tool" }, { status: 400 });
-    }
+    const { tool, content, targetLanguage } = await parseJson(request, studyToolInput);
 
     // Verify session ownership
     const sessionData = await prisma.session.findFirst({
@@ -69,7 +67,7 @@ export async function POST(
     let systemPrompt = STUDY_TOOL_PROMPTS[tool as keyof typeof STUDY_TOOL_PROMPTS];
     
     if (tool === "translate") {
-      systemPrompt += `\nTarget language: ${targetLanguage || "Spanish"}`;
+      systemPrompt += `\nTarget language: ${getStudyLanguage(targetLanguage).name}`;
     }
 
     const messages = [
@@ -98,7 +96,7 @@ export async function POST(
       return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
     }
 
-    return NextResponse.json({ result: parsedResult });
+    return NextResponse.json({ result: parsedResult, language: tool === "translate" ? (targetLanguage || "en") : null });
   } catch (error) {
     return internalError("Study tool", error);
   }

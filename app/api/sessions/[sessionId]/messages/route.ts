@@ -6,32 +6,9 @@ import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib
 import { sessionMessageInput } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { reportServerError } from "@/lib/observability";
+import { buildProfessorPrompt } from "@/lib/professor-prompt";
 
 export const runtime = "nodejs";
-
-function buildSystemPrompt(materials: Array<{ extractedText: string | null }>): string {
-  const context = materials
-    .filter((m) => m.extractedText && m.extractedText.length > 0)
-    .map((m, i) => `--- Material ${i + 1} ---\n${m.extractedText?.slice(0, 3000)}`)
-    .join("\n\n");
-
-  if (!context) {
-    return "You are a helpful AI study assistant. The user has not uploaded any materials with extractable text yet. Answer based on your general knowledge.";
-  }
-
-  return `You are an AI study assistant helping a student learn from their uploaded materials. 
-
-Use the following context from their study materials to answer questions accurately and cite sources when possible:
-
-${context}
-
-Guidelines:
-- Answer based primarily on the provided materials
-- If the answer isn't in the materials, say so and offer general knowledge
-- Cite specific materials when referencing them (e.g., "According to Material 1...")
-- Be clear, structured, and educational
-- Break down complex topics into digestible parts`;
-}
 
 function createSSEStream(controller: ReadableStreamDefaultController, text: string) {
   const encoder = new TextEncoder();
@@ -53,7 +30,8 @@ export async function POST(
     await enforceRateLimit(request, "ai", auth.userId);
 
     const { sessionId } = await params;
-    const { content, stream = false } = await parseJson(request, sessionMessageInput);
+    const { content, stream = false, language } = await parseJson(request, sessionMessageInput);
+    const responseLanguage = language ?? "en";
 
     // Verify session ownership
     const sessionData = await prisma.session.findFirst({
@@ -76,7 +54,7 @@ export async function POST(
     });
 
     // Build context from materials
-    const systemPrompt = buildSystemPrompt(sessionData.materials);
+    const systemPrompt = buildProfessorPrompt(sessionData.materials, responseLanguage);
 
     // Get recent conversation history (last 10 messages)
     const recentMessages = await prisma.message.findMany({
@@ -109,7 +87,7 @@ export async function POST(
       max_tokens: 2000,
     };
     const saveAssistant = (assistantContent: string) => prisma.message.create({
-      data: { sessionId, role: "assistant", content: assistantContent, metadata: { sources } },
+      data: { sessionId, role: "assistant", content: assistantContent, metadata: { sources, language: responseLanguage } },
     });
 
     // If streaming requested, return SSE stream

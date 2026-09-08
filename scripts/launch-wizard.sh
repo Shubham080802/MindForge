@@ -184,7 +184,7 @@ finish() {
 # Replace the example below. Set TOTAL_STAGES to match the stages you write.
 # ──────────────────────────────────────────────────────────────────────────
 
-TOTAL_STAGES=7
+TOTAL_STAGES=8
 
 banner "MindForge production launch"
 
@@ -223,16 +223,32 @@ else
   SKIPPED+=("Vercel CLI link")
 fi
 
-stage "Provision production PostgreSQL"
-open_url "https://vercel.com/marketplace/prisma"
-step "Add Prisma Postgres to mind-forge and finish provisioning."
+stage "Connect production PostgreSQL"
+open_url "https://vercel.com/marketplace/category/storage"
+step "Choose a managed PostgreSQL provider other than Prisma, or use an existing database."
+step "Connect it only to mind-forge and copy its pooled production DATABASE_URL."
 step "Verify backup retention, restore access, and point-in-time recovery for the selected plan."
 warn "Do not claim backup readiness until a restore drill succeeds."
-step "Copy the pooled production DATABASE_URL."
 ask_secret DATABASE_URL "Paste DATABASE_URL:"
 require_value DATABASE_URL "$DATABASE_URL"
 write_env DATABASE_URL "$DATABASE_URL"
 pause "Confirm recovery settings are recorded."
+
+stage "Configure Clerk authentication"
+open_url "https://dashboard.clerk.com"
+step "Create or select the MindForge application and switch to its production instance."
+step "Enable verified email sign-up and the sign-in methods you intend to support."
+step "Open API keys → Quick Copy, then copy the production Publishable Key and Secret Key."
+ask NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY "Paste NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:"
+ask_secret CLERK_SECRET_KEY "Paste CLERK_SECRET_KEY:"
+require_value NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+require_value CLERK_SECRET_KEY "$CLERK_SECRET_KEY"
+write_env NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+write_env CLERK_SECRET_KEY "$CLERK_SECRET_KEY"
+write_env NEXT_PUBLIC_CLERK_SIGN_IN_URL "/auth/signin"
+write_env NEXT_PUBLIC_CLERK_SIGN_UP_URL "/auth/signup"
+write_env NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL "/workspace"
+write_env NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL "/workspace"
 
 stage "Provision distributed rate limiting"
 open_url "https://vercel.com/marketplace/category/storage"
@@ -245,41 +261,28 @@ require_value UPSTASH_REDIS_REST_TOKEN "$UPSTASH_REDIS_REST_TOKEN"
 write_env UPSTASH_REDIS_REST_URL "$UPSTASH_REDIS_REST_URL"
 write_env UPSTASH_REDIS_REST_TOKEN "$UPSTASH_REDIS_REST_TOKEN"
 
-stage "Configure AI, email, and support"
+stage "Configure AI and support"
 open_url "https://platform.openai.com/api-keys"
 step "Create a restricted production OpenAI key for MindForge."
 ask_secret OPENAI_API_KEY "Paste OPENAI_API_KEY:"
 require_value OPENAI_API_KEY "$OPENAI_API_KEY"
 write_env OPENAI_API_KEY "$OPENAI_API_KEY"
-open_url "https://resend.com/domains"
-step "Verify the sending domain and SPF/DKIM, then create a production API key."
-ask_secret EMAIL_SERVER_PASSWORD "Paste the Resend API key (SMTP password):"
-ask EMAIL_FROM "Enter EMAIL_FROM, e.g. MindForge <hello@your-domain.com>:"
 ask NEXT_PUBLIC_SUPPORT_EMAIL "Enter the monitored support email:"
-require_value EMAIL_SERVER_PASSWORD "$EMAIL_SERVER_PASSWORD"
-require_value EMAIL_FROM "$EMAIL_FROM"
 require_value NEXT_PUBLIC_SUPPORT_EMAIL "$NEXT_PUBLIC_SUPPORT_EMAIL"
-write_env EMAIL_SERVER_HOST "smtp.resend.com"
-write_env EMAIL_SERVER_PORT "465"
-write_env EMAIL_SERVER_SECURE "true"
-write_env EMAIL_SERVER_USER "resend"
-write_env EMAIL_SERVER_PASSWORD "$EMAIL_SERVER_PASSWORD"
-write_env EMAIL_FROM "$EMAIL_FROM"
 write_env NEXT_PUBLIC_SUPPORT_EMAIL "$NEXT_PUBLIC_SUPPORT_EMAIL"
 
-stage "Configure domain, auth, retention, and monitoring"
+stage "Configure domain, retention, and monitoring"
 open_url "${VERCEL_PROJECT_URL}/settings/domains"
 step "Add the production domain and wait for Valid Configuration."
-ask NEXTAUTH_URL "Enter the final HTTPS production URL (no trailing slash):"
-require_value NEXTAUTH_URL "$NEXTAUTH_URL"
-PRODUCTION_URL="${NEXTAUTH_URL%/}"
+ask PRODUCTION_URL "Enter the final HTTPS production URL (no trailing slash):"
+require_value PRODUCTION_URL "$PRODUCTION_URL"
+PRODUCTION_URL="${PRODUCTION_URL%/}"
 [[ "$PRODUCTION_URL" == https://* ]] || { warn "Production URL must use https://"; exit 1; }
-write_env NEXTAUTH_URL "$PRODUCTION_URL"
-NEXTAUTH_SECRET=$(_existing NEXTAUTH_SECRET || true)
-[[ -n "$NEXTAUTH_SECRET" ]] || NEXTAUTH_SECRET=$(openssl rand -base64 48 | tr -d '\n')
+RATE_LIMIT_HASH_SECRET=$(_existing RATE_LIMIT_HASH_SECRET || true)
+[[ -n "$RATE_LIMIT_HASH_SECRET" ]] || RATE_LIMIT_HASH_SECRET=$(openssl rand -base64 48 | tr -d '\n')
 CRON_SECRET=$(_existing CRON_SECRET || true)
 [[ -n "$CRON_SECRET" ]] || CRON_SECRET=$(openssl rand -base64 48 | tr -d '\n')
-write_env NEXTAUTH_SECRET "$NEXTAUTH_SECRET"
+write_env RATE_LIMIT_HASH_SECRET "$RATE_LIMIT_HASH_SECRET"
 write_env CRON_SECRET "$CRON_SECRET"
 write_env TRUSTED_PROXY_HEADER "x-forwarded-for"
 write_env AUDIT_RETENTION_DAYS "365"
@@ -298,18 +301,17 @@ stage "Sync secrets, migrate, and deploy"
 say "This transmits the collected credentials to the linked Vercel project."
 confirm "Set production variables in Vercel now?" || exit 1
 set_vercel_env DATABASE_URL "$DATABASE_URL"
-set_vercel_env NEXTAUTH_URL "$PRODUCTION_URL" plain
-set_vercel_env NEXTAUTH_SECRET "$NEXTAUTH_SECRET"
+set_vercel_env NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" plain
+set_vercel_env CLERK_SECRET_KEY "$CLERK_SECRET_KEY"
+set_vercel_env NEXT_PUBLIC_CLERK_SIGN_IN_URL "/auth/signin" plain
+set_vercel_env NEXT_PUBLIC_CLERK_SIGN_UP_URL "/auth/signup" plain
+set_vercel_env NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL "/workspace" plain
+set_vercel_env NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL "/workspace" plain
 set_vercel_env OPENAI_API_KEY "$OPENAI_API_KEY"
 set_vercel_env UPSTASH_REDIS_REST_URL "$UPSTASH_REDIS_REST_URL" plain
 set_vercel_env UPSTASH_REDIS_REST_TOKEN "$UPSTASH_REDIS_REST_TOKEN"
+set_vercel_env RATE_LIMIT_HASH_SECRET "$RATE_LIMIT_HASH_SECRET"
 set_vercel_env TRUSTED_PROXY_HEADER "x-forwarded-for" plain
-set_vercel_env EMAIL_SERVER_HOST "smtp.resend.com" plain
-set_vercel_env EMAIL_SERVER_PORT "465" plain
-set_vercel_env EMAIL_SERVER_SECURE "true" plain
-set_vercel_env EMAIL_SERVER_USER "resend" plain
-set_vercel_env EMAIL_SERVER_PASSWORD "$EMAIL_SERVER_PASSWORD"
-set_vercel_env EMAIL_FROM "$EMAIL_FROM" plain
 set_vercel_env NEXT_PUBLIC_SUPPORT_EMAIL "$NEXT_PUBLIC_SUPPORT_EMAIL" plain
 set_vercel_env CRON_SECRET "$CRON_SECRET"
 set_vercel_env AUDIT_RETENTION_DAYS "365" plain
@@ -327,15 +329,15 @@ step "Verify sign-up, email verification, sign-in, upload, quiz generation, and 
 pause "Return after the production journey works."
 
 stage "Run E2E and record operational sign-off"
-ask E2E_EMAIL "Disposable verified E2E learner email:"
-ask_secret E2E_PASSWORD "Disposable E2E learner password:"
+say "Use an existing Clerk test user with a +clerk_test email address."
+ask E2E_EMAIL "Disposable verified Clerk E2E learner email:"
 require_value E2E_EMAIL "$E2E_EMAIL"
-require_value E2E_PASSWORD "$E2E_PASSWORD"
 set_secret E2E_EMAIL "$E2E_EMAIL"
-set_secret E2E_PASSWORD "$E2E_PASSWORD"
+set_secret CLERK_PUBLISHABLE_KEY "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"
+set_secret CLERK_SECRET_KEY "$CLERK_SECRET_KEY"
 set_var STAGING_BASE_URL "$PRODUCTION_URL"
 if confirm "Run destructive staging E2E against $PRODUCTION_URL now?"; then
-  PLAYWRIGHT_BASE_URL="$PRODUCTION_URL" E2E_EMAIL="$E2E_EMAIL" E2E_PASSWORD="$E2E_PASSWORD" corepack pnpm test:e2e:staging
+  PLAYWRIGHT_BASE_URL="$PRODUCTION_URL" E2E_EMAIL="$E2E_EMAIL" NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" CLERK_SECRET_KEY="$CLERK_SECRET_KEY" corepack pnpm test:e2e:staging
 else
   SKIPPED+=("staging E2E test")
 fi

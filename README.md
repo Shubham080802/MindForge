@@ -1,11 +1,11 @@
 # MindForge
 
 MindForge is a private, source-grounded AI study workspace built with Next.js,
-NextAuth, Prisma, PostgreSQL, OpenAI, and Upstash Redis.
+Clerk, Prisma, PostgreSQL, OpenAI, and Upstash Redis.
 
 ## Product capabilities
 
-- Verified email/password accounts with optional Google and GitHub sign-in
+- Clerk-managed verified accounts and configurable social sign-in
 - Private PDF, DOCX, text, Markdown, and image/OCR material ingestion
 - Account-scoped sessions, contextual chat, search, source downloads, and deletion
 - Summaries, concepts, flashcards, quizzes, study plans, translation, and speech
@@ -19,8 +19,8 @@ NextAuth, Prisma, PostgreSQL, OpenAI, and Upstash Redis.
 - Node.js 20+
 - Corepack and pnpm 10
 - PostgreSQL 14+
+- Clerk application credentials
 - OpenAI API credentials
-- SMTP credentials
 - Upstash Redis credentials for production abuse protection
 
 ## Local development
@@ -48,9 +48,9 @@ For a guided, resumable Vercel production setup, run:
 ```
 
 The wizard links the existing project, captures secrets in the ignored `.env`,
-guides managed Postgres and Redis provisioning, applies migrations, deploys,
-runs staging E2E, and records local operational owners. Read the deployment
-runbook before launching.
+guides a non-Prisma managed Postgres connection, Clerk and Redis setup, applies
+migrations, deploys, runs staging E2E, and records local operational owners.
+Read the deployment runbook before launching.
 
 ```bash
 corepack pnpm install --frozen-lockfile
@@ -64,12 +64,14 @@ corepack pnpm build
 corepack pnpm test:e2e:public
 ```
 
-For the authenticated staging flow, provide a disposable verified learner:
+For the authenticated staging flow, provide an existing disposable Clerk test
+learner and the Clerk development-instance keys:
 
 ```bash
 PLAYWRIGHT_BASE_URL=https://staging.example.com \
-E2E_EMAIL=learner@example.com \
-E2E_PASSWORD='staging-password' \
+E2E_EMAIL=learner+clerk_test@example.com \
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_... \
+CLERK_SECRET_KEY=sk_test_... \
 corepack pnpm test:e2e:staging
 ```
 

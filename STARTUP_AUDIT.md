@@ -33,6 +33,31 @@ instance/keys, OpenAI, Upstash, support ownership, and operational sign-off.
 | Operations | Runbooks ready; evidence pending | CI, additive migration, release/rollback, restore drill, retention, incident response, and an interactive launch wizard are present. A named owner, tested restore, Clerk DNS/domain verification, and alert proof are still missing. |
 | Automated quality | Pass | Behavioral unit tests, TypeScript, lint, production build, dependency audit, public browser smoke checks, and an explicit Clerk-authenticated staging journey form the gate. Authenticated E2E correctly refuses to run without its real Clerk inputs. |
 
+## Live Vercel audit
+
+Production was exercised at `https://mind-forge-ashy.vercel.app` on 2026-09-07
+using a real Clerk development-mode session and Vercel runtime logs.
+
+- Landing, About, Privacy, Terms, Security, Support, sign-in, and sign-up return
+  HTTP 200. Anonymous protected API access returns JSON HTTP 401.
+- The exact reported New Session failure reproduced deterministically. The
+  client generated a random UUID and navigated to it without creating a session;
+  the destination then displayed `Failed to load session: Request could not be
+  completed`.
+- Vercel tied the failing request to `PrismaClientInitializationError` because
+  production `DATABASE_URL` resolves to an empty string. Readiness therefore
+  correctly returns HTTP 503 with database `unavailable` and configuration
+  `invalid`.
+- The workspace sidebar was also rendering three hard-coded 2024 demo sessions,
+  all of which followed the same broken lookup path.
+- This pass changes New Session to return to the real creation form, replaces
+  demo rows with the authenticated `/api/sessions` result, and shows an explicit
+  storage-offline state when that dependency is unavailable. The authenticated
+  browser suite now locks down the New Session navigation contract.
+- Session creation, materials, library data, AI responses, and study tools
+  cannot pass a live end-to-end audit until PostgreSQL, OpenAI, and Upstash have
+  real non-placeholder production values.
+
 ## Clerk migration review
 
 1. `clerkMiddleware()` covers every dynamic/API request and uses Clerk's current

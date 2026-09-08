@@ -16,6 +16,10 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await page.getByRole("button", { name: "Analyze & Start Session" }).click();
   await expect(page).toHaveURL(/\/workspace\//);
 
+  await page.getByRole("button", { name: "New Session" }).click();
+  await expect(page).toHaveURL(/\/workspace$/);
+  await expect(page.getByRole("heading", { name: "New Study Session" })).toBeVisible();
+
   await page.goto("/library");
   await expect(page.getByText("Explain this short biology note")).toBeVisible();
 });

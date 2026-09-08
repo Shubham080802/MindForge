@@ -17,6 +17,7 @@ interface SessionItem {
 
 interface SidebarProps {
   sessions: SessionItem[];
+  emptyMessage?: string;
   currentSessionId?: string;
   onNewSession: () => void;
   onSelectSession: (id: string) => void;
@@ -26,6 +27,7 @@ interface SidebarProps {
 
 export function Sidebar({
   sessions,
+  emptyMessage = "No sessions yet. Create your first study session!",
   currentSessionId,
   onNewSession,
   onSelectSession,
@@ -76,7 +78,7 @@ export function Sidebar({
             <div className="space-y-1">
               {sessions.length === 0 ? (
                 <div className="py-8 text-center text-sm text-muted-foreground">
-                  No sessions yet. Create your first study session!
+                  {emptyMessage}
                 </div>
               ) : (
                 sessions.map((session) => (

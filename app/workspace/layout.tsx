@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -10,22 +10,50 @@ interface WorkspaceLayoutProps {
   children: React.ReactNode;
 }
 
+interface SessionItem {
+  id: string;
+  title: string;
+  updatedAt: string;
+}
+
 function WorkspaceLayoutContent({ children }: WorkspaceLayoutProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [sessionsState, setSessionsState] = useState<"loading" | "ready" | "unavailable">("loading");
 
-  const sessions = [
-    { id: "1", title: "Machine Learning Basics", updatedAt: "2024-01-15T10:30:00Z" },
-    { id: "2", title: "React Hooks Deep Dive", updatedAt: "2024-01-14T14:20:00Z" },
-    { id: "3", title: "Database Design Patterns", updatedAt: "2024-01-13T09:15:00Z" },
-  ];
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadSessions() {
+      setSessionsState("loading");
+      try {
+        const response = await fetch("/api/sessions", {
+          credentials: "include",
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error(`Session list returned ${response.status}`);
+
+        const data = (await response.json()) as { sessions: SessionItem[] };
+        setSessions(data.sessions);
+        setSessionsState("ready");
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("Failed to load session list:", error);
+        setSessions([]);
+        setSessionsState("unavailable");
+      }
+    }
+
+    void loadSessions();
+    return () => controller.abort();
+  }, [pathname]);
 
   const currentSessionId = pathname.split("/")[2];
 
   const handleNewSession = () => {
-    const newId = crypto.randomUUID();
-    router.push(`/workspace/${newId}`);
+    router.push("/workspace");
   };
 
   const handleSelectSession = (id: string) => {
@@ -36,6 +64,13 @@ function WorkspaceLayoutContent({ children }: WorkspaceLayoutProps) {
     <div className="flex h-screen bg-background">
       <Sidebar
         sessions={sessions}
+        emptyMessage={
+          sessionsState === "loading"
+            ? "Loading sessions…"
+            : sessionsState === "unavailable"
+              ? "Sessions are unavailable while storage is offline."
+              : undefined
+        }
         currentSessionId={currentSessionId}
         onNewSession={handleNewSession}
         onSelectSession={handleSelectSession}

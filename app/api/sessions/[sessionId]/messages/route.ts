@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
-import { getOpenAI } from "@/lib/ai-client";
+import { getAIChatModel, getAIClient } from "@/lib/ai-client";
 import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { sessionMessageInput } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -64,7 +64,7 @@ export async function POST(
     if (!sessionData) {
       return NextResponse.json({ message: "Session not found" }, { status: 404 });
     }
-    const openai = getOpenAI();
+    const ai = getAIClient();
 
     // Save user message
     await prisma.message.create({
@@ -103,7 +103,7 @@ export async function POST(
       })),
     ];
     const generationOptions = {
-      model: process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini",
+      model: getAIChatModel(),
       messages,
       temperature: 0.7,
       max_tokens: 2000,
@@ -121,7 +121,7 @@ export async function POST(
           try {
             let fullContent = "";
             
-            const completion = await openai.chat.completions.create({
+            const completion = await ai.chat.completions.create({
               ...generationOptions,
               stream: true,
             });
@@ -139,7 +139,7 @@ export async function POST(
 
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ message: assistantMessage, done: true })}\n\n`));
           } catch (aiError) {
-            await reportServerError("OpenAI stream", aiError, { sessionId });
+            await reportServerError("AI stream", aiError, { sessionId });
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ error: "Failed to generate response", done: true })}\n\n`));
           } finally {
             closeSSEStream(controller);
@@ -160,14 +160,14 @@ export async function POST(
     let aiContent = "";
 
     try {
-      const completion = await openai.chat.completions.create({
+      const completion = await ai.chat.completions.create({
         ...generationOptions,
       });
 
       aiContent = completion.choices[0]?.message?.content || "I couldn't generate a response.";
     } catch (aiError) {
-      await reportServerError("OpenAI completion", aiError, { sessionId });
-      aiContent = "I encountered an error while generating a response. Please check your OpenAI API key and try again.";
+      await reportServerError("AI completion", aiError, { sessionId });
+      aiContent = "I encountered an error while generating a response. Please try again.";
     }
 
     // Save assistant message

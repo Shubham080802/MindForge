@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
-import { getOpenAI } from "@/lib/ai-client";
+import { getAIChatModel, getAIClient } from "@/lib/ai-client";
 import { internalError, requireMutation } from "@/lib/request-guard";
 import { enforceRateLimit } from "@/lib/rate-limit";
 
@@ -64,7 +64,7 @@ export async function POST(
     if (!context) {
       return NextResponse.json({ message: "No study materials with extractable text found" }, { status: 400 });
     }
-    const openai = getOpenAI();
+    const ai = getAIClient();
 
     let systemPrompt = STUDY_TOOL_PROMPTS[tool as keyof typeof STUDY_TOOL_PROMPTS];
     
@@ -77,8 +77,8 @@ export async function POST(
       { role: "user" as const, content: content || context },
     ];
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+    const completion = await ai.chat.completions.create({
+      model: getAIChatModel(),
       messages,
       temperature: 0.3,
       max_tokens: 3000,

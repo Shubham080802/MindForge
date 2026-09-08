@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { ClerkProvider } from "@clerk/nextjs";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
@@ -26,9 +27,16 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans antialiased`}>
-        <ErrorBoundary>
-          <Providers>{children}</Providers>
-        </ErrorBoundary>
+        <ClerkProvider
+          signInUrl="/auth/signin"
+          signUpUrl="/auth/signup"
+          signInFallbackRedirectUrl="/workspace"
+          signUpFallbackRedirectUrl="/workspace"
+        >
+          <ErrorBoundary>
+            <Providers>{children}</Providers>
+          </ErrorBoundary>
+        </ClerkProvider>
       </body>
     </html>
   );

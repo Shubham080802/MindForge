@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Plus, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatRelativeTime } from "@/lib/utils";
-import { useSession } from "next-auth/react";
+import { useUser } from "@clerk/nextjs";
 import Link from "next/link";
 
 interface SessionItem {
@@ -32,8 +32,8 @@ export function Sidebar({
   collapsed = false,
   onToggleCollapse,
 }: SidebarProps) {
-  const { data: account } = useSession();
-  const displayName = account?.user?.name || "Learner";
+  const { user } = useUser();
+  const displayName = user?.fullName || "Learner";
   const initial = displayName.trim().charAt(0).toUpperCase() || "L";
   return (
     <aside
@@ -124,7 +124,7 @@ export function Sidebar({
           {!collapsed && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{displayName}</p>
-              <p className="text-xs text-muted-foreground truncate">{account?.user?.email || "Signed in"}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.primaryEmailAddress?.emailAddress || "Signed in"}</p>
             </div>
           )}
         </div>

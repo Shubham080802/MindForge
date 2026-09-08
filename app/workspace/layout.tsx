@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Sidebar } from "@/components/sidebar";
-import { useSession } from "next-auth/react";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
@@ -12,7 +11,6 @@ interface WorkspaceLayoutProps {
 }
 
 function WorkspaceLayoutContent({ children }: WorkspaceLayoutProps) {
-  const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);

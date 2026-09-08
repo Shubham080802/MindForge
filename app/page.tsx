@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ArrowRight, BookOpen, FileSearch, Info, Mic, ShieldCheck } from "lucide-react";
-import { useSession } from "next-auth/react";
+import { useAuth } from "@clerk/nextjs";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { UserDropdown } from "@/components/ui/user-dropdown";
 
@@ -25,9 +25,9 @@ const features = [
 ];
 
 export default function HomePage() {
-  const { data: session } = useSession();
-  const primaryHref = session?.user ? "/workspace" : "/auth/signup";
-  const primaryLabel = session?.user ? "Open workspace" : "Create an account";
+  const { isSignedIn } = useAuth();
+  const primaryHref = isSignedIn ? "/workspace" : "/auth/signup";
+  const primaryLabel = isSignedIn ? "Open workspace" : "Create an account";
 
   return (
     <div className="min-h-screen bg-background">
@@ -37,7 +37,7 @@ export default function HomePage() {
             <span className="text-primary">Mind</span><span>Forge</span>
           </Link>
           <nav className="flex items-center gap-4">
-            {session?.user && <Link href="/library" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">Library</Link>}
+            {isSignedIn && <Link href="/library" className="hidden text-sm text-muted-foreground hover:text-foreground sm:block">Library</Link>}
             <Link href="/about" className="hidden items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground sm:flex">
               <Info className="h-4 w-4" /> About
             </Link>

@@ -2,7 +2,6 @@
 
 import { useEffect, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useSession } from "next-auth/react";
 
 interface ShortcutConfig {
   key: string;
@@ -52,7 +51,6 @@ export function useKeyboardShortcuts(shortcuts: ShortcutConfig[]) {
 
 // Predefined shortcut sets
 export function useGlobalShortcuts(onSearch: () => void) {
-  const { data: session } = useSession();
   const router = useRouter();
   const pathname = usePathname();
 

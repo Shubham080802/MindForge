@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { signOut, useSession } from "next-auth/react";
+import { useClerk, useUser } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
 import { AlertCircle, CheckCircle, Loader2, Palette, Save, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
-  const { data: session, update } = useSession();
+  const { user } = useUser();
+  const { signOut } = useClerk();
   const { theme = "system", setTheme } = useTheme();
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
@@ -27,8 +28,12 @@ export default function SettingsPage() {
         return response.json();
       })
       .then(({ user }) => setProfile({ name: user.name || "", email: user.email || "", language: user.language || "en" }))
-      .catch(() => setProfile((current) => ({ ...current, name: session?.user?.name || "", email: session?.user?.email || "" })));
-  }, [session?.user?.email, session?.user?.name]);
+      .catch(() => setProfile((current) => ({
+        ...current,
+        name: user?.fullName || "",
+        email: user?.primaryEmailAddress?.emailAddress || "",
+      })));
+  }, [user?.fullName, user?.primaryEmailAddress?.emailAddress]);
 
   async function saveProfile() {
     setIsSaving(true);
@@ -40,7 +45,7 @@ export default function SettingsPage() {
         body: JSON.stringify({ name: profile.name, language: profile.language }),
       });
       if (!response.ok) throw new Error("Profile could not be updated");
-      await update({ name: profile.name });
+      await user?.reload();
       setMessage({ type: "success", text: "Profile updated" });
     } catch {
       setMessage({ type: "error", text: "Profile could not be updated" });
@@ -55,7 +60,7 @@ export default function SettingsPage() {
     try {
       const response = await fetch("/api/user/account", { method: "DELETE" });
       if (!response.ok) throw new Error("Account could not be deleted");
-      await signOut({ callbackUrl: "/" });
+      await signOut({ redirectUrl: "/" });
     } catch {
       setMessage({ type: "error", text: "Account could not be deleted" });
       setIsSaving(false);

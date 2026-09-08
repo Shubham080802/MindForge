@@ -4,16 +4,12 @@ import { runtimeReadiness } from "@/lib/runtime-config";
 const productionEnv = {
   NODE_ENV: "production",
   DATABASE_URL: "postgresql://user:pass@db.example.com:5432/mindforge",
-  NEXTAUTH_URL: "https://mindforge.example.com",
-  NEXTAUTH_SECRET: "a-secure-production-secret-with-32-chars",
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_configured",
+  CLERK_SECRET_KEY: "sk_live_configured",
   OPENAI_API_KEY: "configured-at-runtime",
-  EMAIL_SERVER_HOST: "smtp.example.com",
-  EMAIL_SERVER_PORT: "587",
-  EMAIL_SERVER_USER: "mailer",
-  EMAIL_SERVER_PASSWORD: "configured-at-runtime",
-  EMAIL_FROM: "MindForge <hello@example.com>",
   UPSTASH_REDIS_REST_URL: "https://redis.example.com",
   UPSTASH_REDIS_REST_TOKEN: "configured-at-runtime",
+  RATE_LIMIT_HASH_SECRET: "a-secure-production-secret-with-32-chars",
   TRUSTED_PROXY_HEADER: "x-forwarded-for",
   NEXT_PUBLIC_SUPPORT_EMAIL: "support@example.com",
   CRON_SECRET: "configured-at-runtime",
@@ -27,18 +23,20 @@ describe("runtime readiness", () => {
   it("reports unsafe or incomplete production configuration", () => {
     const result = runtimeReadiness({
       ...productionEnv,
-      NEXTAUTH_URL: "http://example.com",
+      CLERK_SECRET_KEY: "invalid",
+      RATE_LIMIT_HASH_SECRET: "short",
       CRON_SECRET: "",
       TRUSTED_PROXY_HEADER: "client-ip",
     });
     expect(result.ready).toBe(false);
-    expect(result.issues).toContain("NEXTAUTH_URL must use HTTPS in production");
+    expect(result.issues).toContain("CLERK_SECRET_KEY must be a Clerk secret key");
+    expect(result.issues).toContain("RATE_LIMIT_HASH_SECRET must be at least 32 characters");
     expect(result.issues).toContain("CRON_SECRET is required");
     expect(result.issues).toContain("TRUSTED_PROXY_HEADER must name a supported proxy-controlled header");
   });
 
-  it("rejects half-configured OAuth providers", () => {
-    const result = runtimeReadiness({ ...productionEnv, GOOGLE_CLIENT_ID: "client", GOOGLE_CLIENT_SECRET: "" });
-    expect(result.issues).toContain("GOOGLE OAuth requires both client ID and secret");
+  it("rejects malformed Clerk publishable keys", () => {
+    const result = runtimeReadiness({ ...productionEnv, NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "invalid" });
+    expect(result.issues).toContain("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY must be a Clerk publishable key");
   });
 });

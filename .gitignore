@@ -13,3 +13,5 @@ ops/launch-signoff.local.md
 /test-results
 /playwright-report
 /playwright/.cache
+/playwright/.clerk
+.clerk/

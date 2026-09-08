@@ -1,6 +1,11 @@
 import { spawnSync } from "node:child_process";
 
-const required = ["PLAYWRIGHT_BASE_URL", "E2E_EMAIL", "E2E_PASSWORD"];
+const required = [
+  "PLAYWRIGHT_BASE_URL",
+  "E2E_EMAIL",
+  "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+  "CLERK_SECRET_KEY",
+];
 const missing = required.filter((name) => !process.env[name]?.trim());
 
 if (missing.length) {

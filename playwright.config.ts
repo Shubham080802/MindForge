@@ -2,6 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const externalBaseUrl = process.env.PLAYWRIGHT_BASE_URL;
 const baseURL = externalBaseUrl || "http://localhost:3003";
+const authenticatedRun = Boolean(process.env.E2E_EMAIL);
 
 export default defineConfig({
   testDir: "./e2e",
@@ -20,5 +21,14 @@ export default defineConfig({
     reuseExistingServer: true,
     timeout: 120_000,
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: authenticatedRun
+    ? [
+        { name: "clerk-setup", testMatch: /clerk\.setup\.ts/ },
+        {
+          name: "chromium",
+          dependencies: ["clerk-setup"],
+          use: { ...devices["Desktop Chrome"] },
+        },
+      ]
+    : [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
 });

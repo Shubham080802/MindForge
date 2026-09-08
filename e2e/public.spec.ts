@@ -33,3 +33,12 @@ test("protected API routes reject anonymous requests without redirecting", async
   expect(response.status()).toBe(401);
   await expect(response.json()).resolves.toEqual({ message: "Unauthorized" });
 });
+
+test("protected pages redirect to the branded sign-in route", async ({ request, baseURL }) => {
+  const response = await request.get("/workspace", { maxRedirects: 0 });
+  expect(response.status()).toBe(307);
+
+  const location = response.headers().location;
+  expect(location).toBeTruthy();
+  expect(new URL(location, baseURL).pathname).toBe("/auth/signin");
+});

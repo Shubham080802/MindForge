@@ -84,7 +84,8 @@ export default function SessionPage() {
     try {
       const res = await fetch(`/api/study-tools/${sessionId}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", credentials: "include" },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ tool, content: "" }),
       });
 
@@ -107,7 +108,8 @@ export default function SessionPage() {
     try {
       const res = await fetch("/api/export", {
         method: "POST",
-        headers: { "Content-Type": "application/json", credentials: "include" },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           sessionId,
           format,
@@ -274,7 +276,8 @@ export default function SessionPage() {
     try {
       const res = await fetch("/api/tts", {
         method: "POST",
-        headers: { "Content-Type": "application/json", credentials: "include" },
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ text: text.slice(0, 4096) }),
       });
 

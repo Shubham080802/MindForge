@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Upload, FileText, Image, Send, Plus, X, File, Image as ImageIcon, MessageSquare, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDropzone } from "react-dropzone";
+import { NEW_SESSION_EVENT } from "@/lib/browser-events";
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -18,6 +19,37 @@ export default function WorkspacePage() {
   const [files, setFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
+  const [newSessionReady, setNewSessionReady] = useState(false);
+  const [serviceState, setServiceState] = useState<"checking" | "ready" | "unavailable">("checking");
+  const queryInputRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetch("/api/health", { signal: controller.signal })
+      .then(async (response) => {
+        const readiness = await response.json().catch(() => null);
+        setServiceState(response.ok && readiness?.status === "ok" ? "ready" : "unavailable");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setServiceState("unavailable");
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  useEffect(() => {
+    const resetDraft = () => {
+      setQuery("");
+      setFiles([]);
+      setUploadProgress({});
+      setNewSessionReady(true);
+      queryInputRef.current?.focus();
+    };
+
+    window.addEventListener(NEW_SESSION_EVENT, resetDraft);
+    return () => window.removeEventListener(NEW_SESSION_EVENT, resetDraft);
+  }, []);
 
   const onDrop = (acceptedFiles: File[]) => {
     setFiles((prev) => [...prev, ...acceptedFiles]);
@@ -112,7 +144,18 @@ export default function WorkspacePage() {
         <p className="mt-2 text-muted-foreground">
           Upload materials, ask questions, and get AI-powered explanations
         </p>
+        {newSessionReady && (
+          <p className="mt-2 text-sm text-primary" role="status">
+            New session ready. Add a topic or attach source material.
+          </p>
+        )}
       </div>
+
+      {serviceState === "unavailable" && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-900 dark:text-amber-100" role="alert">
+          Study services are temporarily unavailable. Your selected files remain on this device and cannot be processed until storage and AI services are online.
+        </div>
+      )}
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
@@ -127,6 +170,7 @@ export default function WorkspacePage() {
               <div className="sm:col-span-2">
                 <Label htmlFor="query">Your Question / Topic</Label>
                 <Textarea
+                  ref={queryInputRef}
                   id="query"
                   placeholder="What would you like to learn about? Describe the topic, ask a question, or paste text..."
                   value={query}
@@ -139,7 +183,7 @@ export default function WorkspacePage() {
             </div>
 
             <div>
-              <Label>Attach Files (Optional)</Label>
+              <Label htmlFor="study-materials">Attach Files (Optional)</Label>
               <div
                 {...getRootProps()}
                 className={cn(
@@ -149,7 +193,7 @@ export default function WorkspacePage() {
                     : "border-border hover:border-primary/50"
                 )}
               >
-                <input {...getInputProps()} />
+                <input {...getInputProps({ id: "study-materials" })} />
                 <div className="flex flex-col items-center gap-3">
                   <Upload className="h-10 w-10 text-muted-foreground" />
                   <div>
@@ -202,12 +246,21 @@ export default function WorkspacePage() {
           </CardContent>
         </Card>
 
-        <Button type="submit" className="w-full" size="lg" disabled={isProcessing || (!query.trim() && files.length === 0)}>
+        <Button
+          type="submit"
+          className="w-full"
+          size="lg"
+          disabled={serviceState !== "ready" || isProcessing || (!query.trim() && files.length === 0)}
+        >
           {isProcessing ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               Processing...
             </>
+          ) : serviceState === "checking" ? (
+            "Checking study services…"
+          ) : serviceState === "unavailable" ? (
+            "Study services unavailable"
           ) : (
             "Analyze & Start Session"
           )}

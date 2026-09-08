@@ -13,7 +13,11 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  return authState.redirectToSignIn({ returnBackUrl: req.url });
+  const signInUrl = req.nextUrl.clone();
+  signInUrl.pathname = "/auth/signin";
+  signInUrl.search = "";
+  signInUrl.searchParams.set("redirect_url", req.url);
+  return NextResponse.redirect(signInUrl);
 }, {
   contentSecurityPolicy: {
     directives: {

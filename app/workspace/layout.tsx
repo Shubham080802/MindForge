@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Sidebar } from "@/components/sidebar";
 import { useRouter, usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { NEW_SESSION_EVENT } from "@/lib/browser-events";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 
 interface WorkspaceLayoutProps {
@@ -53,6 +54,10 @@ function WorkspaceLayoutContent({ children }: WorkspaceLayoutProps) {
   const currentSessionId = pathname.split("/")[2];
 
   const handleNewSession = () => {
+    if (pathname === "/workspace") {
+      window.dispatchEvent(new Event(NEW_SESSION_EVENT));
+      return;
+    }
     router.push("/workspace");
   };
 
@@ -74,8 +79,8 @@ function WorkspaceLayoutContent({ children }: WorkspaceLayoutProps) {
         currentSessionId={currentSessionId}
         onNewSession={handleNewSession}
         onSelectSession={handleSelectSession}
-        collapsed={false}
-        onToggleCollapse={() => {}}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed((current) => !current)}
       />
       <main className="flex-1 flex flex-col min-w-0">
         <header className="h-16 border-b bg-card px-4 flex items-center justify-between">

@@ -10,6 +10,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 export const metadata: Metadata = {
   title: "MindForge - AI Study Assistant",
   description: "Upload study materials, get detailed explanations, and interact with an AI assistant.",
+  icons: { icon: "/favicon.svg" },
+  manifest: "/site.webmanifest",
 };
 
 export const viewport: Viewport = {

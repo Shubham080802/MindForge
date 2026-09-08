@@ -2,7 +2,7 @@ import OpenAI from "openai";
 
 let client: OpenAI | undefined;
 
-export const DEFAULT_AI_MODEL = "gemini-2.5-flash-lite";
+export const DEFAULT_AI_MODEL = "gemini-3.5-flash-lite";
 export const GEMINI_OPENAI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
 
 type AIEnvironment = Record<string, string | undefined> & {

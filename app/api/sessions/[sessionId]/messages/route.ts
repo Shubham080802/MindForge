@@ -134,6 +134,10 @@ export async function POST(
               }
             }
 
+            if (!fullContent.trim()) {
+              throw new Error("AI provider returned an empty response");
+            }
+
             // Save complete assistant message
             const assistantMessage = await saveAssistant(fullContent);
 

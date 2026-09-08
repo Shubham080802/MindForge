@@ -273,7 +273,7 @@ warn "The Gemini free tier may use submitted prompts and material to improve Goo
 ask_secret GEMINI_API_KEY "Paste GEMINI_API_KEY:"
 require_value GEMINI_API_KEY "$GEMINI_API_KEY"
 write_env GEMINI_API_KEY "$GEMINI_API_KEY"
-write_env AI_CHAT_MODEL "gemini-2.5-flash-lite"
+write_env AI_CHAT_MODEL "gemini-3.5-flash-lite"
 ask NEXT_PUBLIC_SUPPORT_EMAIL "Enter the monitored support email:"
 require_value NEXT_PUBLIC_SUPPORT_EMAIL "$NEXT_PUBLIC_SUPPORT_EMAIL"
 write_env NEXT_PUBLIC_SUPPORT_EMAIL "$NEXT_PUBLIC_SUPPORT_EMAIL"
@@ -316,7 +316,7 @@ set_vercel_env NEXT_PUBLIC_CLERK_SIGN_UP_URL "/auth/signup" plain
 set_vercel_env NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL "/workspace" plain
 set_vercel_env NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL "/workspace" plain
 set_vercel_env GEMINI_API_KEY "$GEMINI_API_KEY"
-set_vercel_env AI_CHAT_MODEL "gemini-2.5-flash-lite" plain
+set_vercel_env AI_CHAT_MODEL "gemini-3.5-flash-lite" plain
 set_vercel_env UPSTASH_REDIS_REST_URL "$UPSTASH_REDIS_REST_URL" plain
 set_vercel_env UPSTASH_REDIS_REST_TOKEN "$UPSTASH_REDIS_REST_TOKEN"
 set_vercel_env RATE_LIMIT_HASH_SECRET "$RATE_LIMIT_HASH_SECRET"

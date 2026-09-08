@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useKeyboardShortcuts, useSessionShortcuts } from "@/hooks/use-keyboard-shortcuts";
+import { readAIStream } from "@/lib/sse-stream";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -185,6 +186,7 @@ export default function SessionPage() {
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
     setIsLoading(true);
+    const assistantMessageId = crypto.randomUUID();
 
     try {
       const res = await fetch(`/api/sessions/${sessionId}/messages`, { credentials: "include",
@@ -195,11 +197,7 @@ export default function SessionPage() {
 
       if (!res.ok) throw new Error("Failed to send message");
 
-      // Handle streaming response
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let assistantMessageId = crypto.randomUUID();
-      let fullContent = "";
+      if (!res.body) throw new Error("The AI response stream was unavailable");
 
       // Add placeholder assistant message
       const assistantMessage: Message = {
@@ -210,47 +208,23 @@ export default function SessionPage() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value);
-          const lines = chunk.split("\n");
-          
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.content && !data.done) {
-                  fullContent += data.content;
-                  setMessages((prev) => 
-                    prev.map((m) => 
-                      m.id === assistantMessageId 
-                        ? { ...m, content: fullContent }
-                        : m
-                    )
-                  );
-                } else if (data.done && data.message) {
-                  // Final message with metadata
-                  setMessages((prev) => 
-                    prev.map((m) => 
-                      m.id === assistantMessageId 
-                        ? { ...data.message, content: fullContent }
-                        : m
-                    )
-                  );
-                }
-              } catch (e) {
-                // Ignore parsing errors
-              }
-            }
-          }
-        }
+      const result = await readAIStream(res.body, (fullContent) => {
+        setMessages((prev) => prev.map((message) =>
+          message.id === assistantMessageId ? { ...message, content: fullContent } : message
+        ));
+      });
+      if (!result.content.trim()) throw new Error("The AI returned an empty response");
+      if (result.message) {
+        setMessages((prev) => prev.map((message) =>
+          message.id === assistantMessageId
+            ? { ...message, ...result.message, content: result.content } as Message
+            : message
+        ));
       }
     } catch (error) {
       console.error("Send message error:", error);
-      alert("Failed to send message");
+      setMessages((prev) => prev.filter((message) => message.id !== assistantMessageId));
+      alert(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setIsLoading(false);
     }

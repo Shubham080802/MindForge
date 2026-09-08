@@ -3,6 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@10.34.5",
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.18",
+      "sharp": "0.35.4"
+    }
+  },
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",

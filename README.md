@@ -39,6 +39,11 @@ abuse protection is missing.
 In production, `TRUSTED_PROXY_HEADER` must name a client-IP header that your
 edge overwrites so callers cannot choose their own rate-limit identity.
 
+For Supabase on Vercel, set `DATABASE_URL` to the transaction-pooler URL on
+port 6543 with `pgbouncer=true&connection_limit=1`, and set `DIRECT_URL` to the
+session-pooler URL on port 5432. Prisma uses `DIRECT_URL` for migrations while
+serverless requests use the bounded transaction pool.
+
 ## Release gate
 
 For a guided, resumable Vercel production setup, run:

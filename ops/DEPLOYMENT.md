@@ -8,6 +8,10 @@
 4. Use a non-Prisma managed PostgreSQL plan with encrypted storage, point-in-time recovery, automated backups, and tested restore access.
 5. In Clerk, require verified primary email addresses, restrict authorized parties to the production origin, configure the intended sign-in methods, and verify the production domain/DNS records.
 
+For Supabase, use its transaction pooler for `DATABASE_URL` and session pooler
+for `DIRECT_URL`. Never run migrations through transaction mode, and never
+expose either connection string to browser code.
+
 ## Release
 
 ```bash

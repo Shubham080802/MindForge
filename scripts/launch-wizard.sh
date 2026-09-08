@@ -224,14 +224,19 @@ else
 fi
 
 stage "Connect production PostgreSQL"
-open_url "https://vercel.com/marketplace/category/storage"
-step "Choose a managed PostgreSQL provider other than Prisma, or use an existing database."
-step "Connect it only to mind-forge and copy its pooled production DATABASE_URL."
-step "Verify backup retention, restore access, and point-in-time recovery for the selected plan."
+open_url "https://database.new"
+step "Create or select the MindForge Supabase project in the intended production region."
+step "Open Connect → ORMs → Prisma and copy the transaction-pooler URL (port 6543)."
+step "Use that URL for DATABASE_URL and ensure it includes pgbouncer=true&connection_limit=1."
+step "Copy the session-pooler URL (port 5432) for DIRECT_URL and migration traffic."
+step "Open Database → Backups and record the plan's backup/restore capabilities."
 warn "Do not claim backup readiness until a restore drill succeeds."
-ask_secret DATABASE_URL "Paste DATABASE_URL:"
+ask_secret DATABASE_URL "Paste the Supabase transaction-pooler DATABASE_URL:"
 require_value DATABASE_URL "$DATABASE_URL"
+ask_secret DIRECT_URL "Paste the Supabase session-pooler DIRECT_URL:"
+require_value DIRECT_URL "$DIRECT_URL"
 write_env DATABASE_URL "$DATABASE_URL"
+write_env DIRECT_URL "$DIRECT_URL"
 pause "Confirm recovery settings are recorded."
 
 stage "Configure Clerk authentication"
@@ -301,6 +306,7 @@ stage "Sync secrets, migrate, and deploy"
 say "This transmits the collected credentials to the linked Vercel project."
 confirm "Set production variables in Vercel now?" || exit 1
 set_vercel_env DATABASE_URL "$DATABASE_URL"
+set_vercel_env DIRECT_URL "$DIRECT_URL"
 set_vercel_env NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY "$NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY" plain
 set_vercel_env CLERK_SECRET_KEY "$CLERK_SECRET_KEY"
 set_vercel_env NEXT_PUBLIC_CLERK_SIGN_IN_URL "/auth/signin" plain

@@ -8,6 +8,7 @@ export function isTrustedProxyHeader(value: string | undefined) {
 
 const REQUIRED_PRODUCTION_VALUES = [
   "DATABASE_URL",
+  "DIRECT_URL",
   "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
   "CLERK_SECRET_KEY",
   "OPENAI_API_KEY",

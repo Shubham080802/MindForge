@@ -4,6 +4,7 @@ import { runtimeReadiness } from "@/lib/runtime-config";
 const productionEnv = {
   NODE_ENV: "production",
   DATABASE_URL: "postgresql://user:pass@db.example.com:5432/mindforge",
+  DIRECT_URL: "postgresql://user:pass@db.example.com:5432/mindforge",
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_live_configured",
   CLERK_SECRET_KEY: "sk_live_configured",
   OPENAI_API_KEY: "configured-at-runtime",

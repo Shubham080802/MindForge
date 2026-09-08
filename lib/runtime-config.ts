@@ -8,16 +8,12 @@ export function isTrustedProxyHeader(value: string | undefined) {
 
 const REQUIRED_PRODUCTION_VALUES = [
   "DATABASE_URL",
-  "NEXTAUTH_URL",
-  "NEXTAUTH_SECRET",
+  "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY",
+  "CLERK_SECRET_KEY",
   "OPENAI_API_KEY",
-  "EMAIL_SERVER_HOST",
-  "EMAIL_SERVER_PORT",
-  "EMAIL_SERVER_USER",
-  "EMAIL_SERVER_PASSWORD",
-  "EMAIL_FROM",
   "UPSTASH_REDIS_REST_URL",
   "UPSTASH_REDIS_REST_TOKEN",
+  "RATE_LIMIT_HASH_SECRET",
   "TRUSTED_PROXY_HEADER",
   "NEXT_PUBLIC_SUPPORT_EMAIL",
   "CRON_SECRET",
@@ -29,21 +25,18 @@ export function runtimeReadiness(env: RuntimeEnvironment, production = env.NODE_
     for (const name of REQUIRED_PRODUCTION_VALUES) {
       if (!env[name]?.trim()) issues.push(`${name} is required`);
     }
-    if (env.NEXTAUTH_URL && !env.NEXTAUTH_URL.startsWith("https://")) {
-      issues.push("NEXTAUTH_URL must use HTTPS in production");
+    if (env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && !env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY.startsWith("pk_")) {
+      issues.push("NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY must be a Clerk publishable key");
     }
-    if (env.NEXTAUTH_SECRET && env.NEXTAUTH_SECRET.length < 32) {
-      issues.push("NEXTAUTH_SECRET must be at least 32 characters");
+    if (env.CLERK_SECRET_KEY && !env.CLERK_SECRET_KEY.startsWith("sk_")) {
+      issues.push("CLERK_SECRET_KEY must be a Clerk secret key");
+    }
+    if (env.RATE_LIMIT_HASH_SECRET && env.RATE_LIMIT_HASH_SECRET.length < 32) {
+      issues.push("RATE_LIMIT_HASH_SECRET must be at least 32 characters");
     }
     if (env.TRUSTED_PROXY_HEADER && !isTrustedProxyHeader(env.TRUSTED_PROXY_HEADER)) {
       issues.push("TRUSTED_PROXY_HEADER must name a supported proxy-controlled header");
     }
-  }
-
-  for (const provider of ["GOOGLE", "GITHUB"] as const) {
-    const hasId = Boolean(env[`${provider}_CLIENT_ID`]?.trim());
-    const hasSecret = Boolean(env[`${provider}_CLIENT_SECRET`]?.trim());
-    if (hasId !== hasSecret) issues.push(`${provider} OAuth requires both client ID and secret`);
   }
 
   const retentionDays = Number(env.AUDIT_RETENTION_DAYS ?? "365");

@@ -114,8 +114,8 @@ function configuredClientAddress(request: { headers?: RateLimitHeaders }) {
 }
 
 function hashIdentity(kind: "ip" | "subject", value: string) {
-  const secret = process.env.NEXTAUTH_SECRET;
-  if (!secret) throw new Response("Server authentication is not configured", { status: 503 });
+  const secret = process.env.RATE_LIMIT_HASH_SECRET;
+  if (!secret) throw new Response("Rate-limit identity protection is not configured", { status: 503 });
   return crypto.createHmac("sha256", secret).update(`${kind}:${value.toLowerCase()}`).digest("hex");
 }
 

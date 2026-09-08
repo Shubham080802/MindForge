@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { clerkClient } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { profileUpdateInput } from "@/lib/validation";
@@ -30,6 +31,15 @@ export async function PATCH(request: NextRequest) {
       ...(name !== undefined ? { name } : {}),
       ...(language !== undefined ? { language } : {}),
     };
+
+    if (name !== undefined) {
+      const [firstName, ...remainingName] = name.split(/\s+/);
+      const clerk = await clerkClient();
+      await clerk.users.updateUser(auth.clerkUserId, {
+        firstName,
+        lastName: remainingName.join(" ") || undefined,
+      });
+    }
 
     const user = await prisma.user.update({
       where: { id: auth.userId },

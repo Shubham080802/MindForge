@@ -1,7 +1,7 @@
-import { getServerSession } from "next-auth";
+import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { ZodError, ZodSchema } from "zod";
-import { authOptions } from "@/lib/auth-options";
+import { ensureAppUser } from "@/lib/clerk-user";
 import { reportServerError } from "@/lib/observability";
 
 /**
@@ -10,12 +10,13 @@ import { reportServerError } from "@/lib/observability";
  * behaviour.
  */
 export async function requireAppUser() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
+  const { userId: clerkUserId } = await auth();
+  if (!clerkUserId) {
     return { error: NextResponse.json({ message: "Unauthorized" }, { status: 401 }) } as const;
   }
 
-  return { userId: session.user.id } as const;
+  const user = await ensureAppUser(clerkUserId);
+  return { userId: user.id, clerkUserId } as const;
 }
 
 export function assertSameOrigin(request: NextRequest) {

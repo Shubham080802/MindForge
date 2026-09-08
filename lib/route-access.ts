@@ -3,7 +3,6 @@ export function routeAccess(pathname: string) {
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
   const isProtectedApi = pathname.startsWith("/api/")
-    && !pathname.startsWith("/api/auth/")
     && pathname !== "/api/internal/retention"
     && pathname !== "/api/health";
 

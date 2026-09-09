@@ -3,9 +3,8 @@ import {
   buildGeminiSpeechRequest,
   generateGeminiSpeech,
   pcmToWav,
-  prepareSpeechText,
-  splitSpeechText,
 } from "@/lib/gemini-speech";
+import { prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
 
 describe("Gemini speech generation", () => {
   it("requests exact Hindi speech from an audio-only Flash model", () => {

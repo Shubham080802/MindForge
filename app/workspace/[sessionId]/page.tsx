@@ -22,8 +22,8 @@ import { ExplanationLanguagePicker } from "@/components/explanation-language-pic
 import { useStudyLanguage } from "@/hooks/use-study-language";
 import { evaluateStudyScope } from "@/lib/study-scope";
 import { shouldSubmitComposer } from "@/lib/chat-composer";
-import { getSpeechErrorNotice, loadSpeechVoices, selectSpeechVoice } from "@/lib/speech-voices";
-import { playDecodedAudio } from "@/lib/browser-audio";
+import { getSpeechAudioUrl, playNativeAudio } from "@/lib/browser-audio";
+import { prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -86,18 +86,12 @@ export default function SessionPage() {
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
   const [exportProgress, setExportProgress] = useState<{ active: boolean; format?: string }>({ active: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const speechAudioContextRef = useRef<AudioContext | null>(null);
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechRequestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    if ("speechSynthesis" in window) {
-      void loadSpeechVoices(window.speechSynthesis);
-    }
     return () => {
       speechRequestRef.current?.abort();
-      void speechAudioContextRef.current?.close();
-      window.speechSynthesis?.cancel();
     };
   }, []);
 
@@ -282,10 +276,12 @@ export default function SessionPage() {
   const stopSpeech = () => {
     speechRequestRef.current?.abort();
     speechRequestRef.current = null;
-    void speechAudioContextRef.current?.close();
-    speechAudioContextRef.current = null;
-    speechRef.current = null;
-    window.speechSynthesis?.cancel();
+    const audio = speechAudioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+    }
     setSpeakingMessageId(null);
     setSpeechNotice(null);
   };
@@ -300,103 +296,39 @@ export default function SessionPage() {
 
     stopSpeech();
 
-    if (language.code !== "en") {
-      if (!("AudioContext" in window)) {
-        setSpeechNotice("This browser cannot play generated professor audio.");
-        return;
-      }
-
-      const controller = new AbortController();
-      const audioContext = new AudioContext();
-      const contextReady = audioContext.resume();
-      speechRequestRef.current = controller;
-      speechAudioContextRef.current = audioContext;
-      setSpeakingMessageId(messageId);
-      setSpeechNotice(`Preparing ${language.name} professor audio…`);
-
-      try {
-        await contextReady;
-        let chunkIndex = 0;
-        let chunkCount = 1;
-
-        while (chunkIndex < chunkCount && !controller.signal.aborted) {
-          const response = await fetch(`/api/sessions/${sessionId}/messages/${messageId}/speech`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            credentials: "include",
-            body: JSON.stringify({ chunkIndex }),
-            signal: controller.signal,
-          });
-          if (!response.ok) {
-            const error = await response.json().catch(() => ({ message: "Hindi audio could not be generated" }));
-            throw new Error(error.message || `${language.name} audio could not be generated`);
-          }
-
-          chunkCount = Number(response.headers.get("X-Speech-Chunk-Count")) || 1;
-          const audioData = await response.arrayBuffer();
-          if (controller.signal.aborted) return;
-
-          setSpeechNotice(`Reading in ${language.name} with Gemini voice · Part ${chunkIndex + 1} of ${chunkCount}`);
-          await playDecodedAudio(audioContext, audioData, controller.signal);
-          chunkIndex += 1;
-        }
-
-        if (!controller.signal.aborted && speechRequestRef.current === controller) {
-          setSpeakingMessageId(null);
-          setSpeechNotice(`Finished reading in ${language.name}.`);
-        }
-      } catch (error) {
-        if (controller.signal.aborted) return;
-        setSpeakingMessageId(null);
-        setSpeechNotice(error instanceof Error ? error.message : `${language.name} audio could not be generated`);
-      } finally {
-        if (speechRequestRef.current === controller) speechRequestRef.current = null;
-        if (speechAudioContextRef.current === audioContext) {
-          speechAudioContextRef.current = null;
-          void audioContext.close();
-        }
-      }
+    const audio = speechAudioRef.current;
+    const chunks = splitSpeechText(prepareSpeechText(text));
+    if (!audio || chunks.length === 0) {
+      setSpeechNotice("This response has no readable audio content.");
       return;
     }
 
-    if (!("speechSynthesis" in window)) {
-      setSpeechNotice("Read aloud is not supported by this browser.");
-      return;
-    }
-
-    speechRef.current = null;
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(text.slice(0, 4096));
-    utterance.lang = language.speechLocale;
-    const availableVoices = await loadSpeechVoices(window.speechSynthesis, {
-      locale: language.speechLocale,
-      languageCode: language.code,
-    });
-    const voice = selectSpeechVoice(availableVoices, language.speechLocale, language.code);
-    if (!voice) {
-      setSpeechNotice(
-        `${language.name} read-aloud needs a ${language.speechLocale} voice. Enable that voice in your browser or device speech settings and try again.`,
-      );
-      return;
-    }
-    utterance.voice = voice;
-    setSpeechNotice(`Reading in ${language.name} with ${voice.name}.`);
-    speechRef.current = utterance;
+    const controller = new AbortController();
+    speechRequestRef.current = controller;
     setSpeakingMessageId(messageId);
+    setSpeechNotice(`Preparing ${language.name} professor audio…`);
 
-    const finish = () => {
-      if (speechRef.current !== utterance) return false;
-      speechRef.current = null;
+    try {
+      for (let chunkIndex = 0; chunkIndex < chunks.length && !controller.signal.aborted; chunkIndex += 1) {
+        await playNativeAudio(
+          audio,
+          getSpeechAudioUrl(sessionId, messageId, chunkIndex),
+          controller.signal,
+          () => setSpeechNotice(`Reading in ${language.name} · Part ${chunkIndex + 1} of ${chunks.length}`),
+        );
+      }
+
+      if (!controller.signal.aborted && speechRequestRef.current === controller) {
+        setSpeakingMessageId(null);
+        setSpeechNotice(`Finished reading in ${language.name}.`);
+      }
+    } catch (error) {
+      if (controller.signal.aborted) return;
       setSpeakingMessageId(null);
-      return true;
-    };
-    utterance.onend = finish;
-    utterance.onerror = (event) => {
-      if (!finish()) return;
-      setSpeechNotice(getSpeechErrorNotice(event.error, language.name));
-    };
-    window.speechSynthesis.speak(utterance);
+      setSpeechNotice(error instanceof Error ? error.message : `${language.name} audio could not be played`);
+    } finally {
+      if (speechRequestRef.current === controller) speechRequestRef.current = null;
+    }
   };
 
   const formatSize = (bytes: number) => {
@@ -604,6 +536,13 @@ export default function SessionPage() {
                   Answers use {getStudyLanguage(explanationLanguage).name} · Multilingual read-aloud uses Gemini professor audio
                 </p>
                 {speechNotice && <p className="mt-1 text-center text-xs text-amber-700 dark:text-amber-300" role="status">{speechNotice}</p>}
+                <audio
+                  ref={speechAudioRef}
+                  controls
+                  controlsList="nodownload"
+                  aria-label="Professor audio player"
+                  className={cn("mx-auto mt-2 h-10 w-full max-w-md", speakingMessageId ? "block" : "hidden")}
+                />
                 <p className="mt-1 text-center text-xs text-muted-foreground">Gemini free tier · Relevant material is sent to Google and may be used to improve its products</p>
               </div>
             </div>

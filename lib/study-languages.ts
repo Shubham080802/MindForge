@@ -1,7 +1,7 @@
 export const STUDY_LANGUAGES = [
   { code: "en", name: "English", nativeName: "English", speechLocale: "en-US" },
   { code: "hi", name: "Hindi", nativeName: "हिन्दी", speechLocale: "hi-IN" },
-  { code: "es", name: "Spanish", nativeName: "Español", speechLocale: "es-ES" },
+  { code: "es", name: "Spanish (Latin America)", nativeName: "Español latinoamericano", speechLocale: "es-MX" },
   { code: "la", name: "Latin", nativeName: "Latina", speechLocale: "la" },
   { code: "fr", name: "French", nativeName: "Français", speechLocale: "fr-FR" },
   { code: "de", name: "German", nativeName: "Deutsch", speechLocale: "de-DE" },

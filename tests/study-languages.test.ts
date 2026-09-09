@@ -6,6 +6,7 @@ describe("study languages", () => {
   it("supports the requested English, Hindi, Spanish, and Latin choices", () => {
     expect(STUDY_LANGUAGE_CODES).toEqual(expect.arrayContaining(["en", "hi", "es", "la"]));
     expect(getStudyLanguage("hi")).toMatchObject({ name: "Hindi", speechLocale: "hi-IN" });
+    expect(getStudyLanguage("es")).toMatchObject({ name: "Spanish (Latin America)", speechLocale: "es-MX" });
     expect(getStudyLanguage("la")).toMatchObject({ name: "Latin", speechLocale: "la" });
   });
 

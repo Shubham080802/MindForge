@@ -28,6 +28,16 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await analyzeButton.click();
   await expect(page).toHaveURL(/\/workspace\//);
 
+  const languagePicker = page.getByLabel("Explanation language");
+  await expect(languagePicker).toBeVisible();
+  await expect(languagePicker).toContainText("English");
+  await expect(languagePicker).toContainText("Hindi");
+  await expect(languagePicker).toContainText("Spanish (Latin America)");
+  await expect(languagePicker).toContainText("Latin");
+  await languagePicker.selectOption("hi");
+  await expect(languagePicker).toHaveValue("hi");
+  await languagePicker.selectOption("en");
+
   await page.getByRole("button", { name: "New Session" }).click();
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByRole("heading", { name: "New Study Session" })).toBeVisible();

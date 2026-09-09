@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { STUDY_LANGUAGES } from "@/lib/study-languages";
 
 export default function SettingsPage() {
   const { user } = useUser();
@@ -88,7 +89,7 @@ export default function SettingsPage() {
               <Card><CardHeader><CardTitle>Profile information</CardTitle><CardDescription>Update your display name and study language.</CardDescription></CardHeader><CardContent className="space-y-4">
                 <div className="space-y-2"><Label htmlFor="name">Name</Label><Input id="name" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></div>
                 <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" value={profile.email} disabled className="bg-muted" /></div>
-                <div className="space-y-2"><Label htmlFor="language">Language</Label><select id="language" value={profile.language} onChange={(event) => setProfile({ ...profile, language: event.target.value })} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="en">English</option><option value="es">Spanish</option><option value="fr">French</option><option value="de">German</option><option value="zh">Chinese</option><option value="ja">Japanese</option><option value="ko">Korean</option></select></div>
+                <div className="space-y-2"><Label htmlFor="language">Explanation language</Label><select id="language" value={profile.language} onChange={(event) => setProfile({ ...profile, language: event.target.value })} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">{STUDY_LANGUAGES.map((language) => <option key={language.code} value={language.code}>{language.name} · {language.nativeName}</option>)}</select><p className="text-xs text-muted-foreground">Your professor uses this language by default. You can change it inside any study session.</p></div>
                 <Button onClick={saveProfile} disabled={isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save changes</Button>
               </CardContent></Card>
             </TabsContent>

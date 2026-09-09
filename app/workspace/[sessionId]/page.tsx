@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Eye, FileSearch } from "lucide-react";
+import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Eye, FileSearch, GraduationCap } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { PDFViewerDialog } from "./pdf-viewer-dialog";
@@ -17,6 +17,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useKeyboardShortcuts, useSessionShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { readAIStream } from "@/lib/sse-stream";
+import { getStudyLanguage, isStudyLanguageCode, STUDY_LANGUAGES, type StudyLanguageCode } from "@/lib/study-languages";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -40,6 +41,10 @@ interface Message {
   role: "user" | "assistant";
   content: string;
   sources?: Array<{ materialId: string; excerpt: string }>;
+  metadata?: {
+    sources?: Array<{ materialId: string; excerpt: string }>;
+    language?: StudyLanguageCode;
+  };
   createdAt: string;
 }
 
@@ -65,8 +70,11 @@ export default function SessionPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
+  const [speechNotice, setSpeechNotice] = useState<string | null>(null);
+  const [explanationLanguage, setExplanationLanguage] = useState<StudyLanguageCode>("en");
+  const [isSavingLanguage, setIsSavingLanguage] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
-  const [studyToolResult, setStudyToolResult] = useState<{ tool: string; result: any } | null>(null);
+  const [studyToolResult, setStudyToolResult] = useState<{ tool: string; result: any; language?: StudyLanguageCode } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [exportFormat, setExportFormat] = useState<"markdown" | "json" | "pdf" | null>(null);
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
@@ -87,17 +95,21 @@ export default function SessionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ tool, content: "" }),
+        body: JSON.stringify({ tool, content: "", targetLanguage: tool === "translate" ? explanationLanguage : undefined }),
       });
 
-      if (!res.ok) throw new Error("Failed to generate");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: "Failed to generate" }));
+        throw new Error(errorData.message || "Failed to generate");
+      }
 
       const data = await res.json();
-      setStudyToolResult({ tool, result: data.result });
-      setStoredToolResults((prev) => ({ ...prev, [tool]: data.result }));
+      const resultKey = tool === "translate" ? `translate-${explanationLanguage}` : tool;
+      setStudyToolResult({ tool, result: data.result, language: data.language });
+      setStoredToolResults((prev) => ({ ...prev, [resultKey]: data.result }));
     } catch (error) {
       console.error("Study tool error:", error);
-      alert("Failed to generate study tool");
+      alert(error instanceof Error ? error.message : "Failed to generate study tool");
     } finally {
       setIsGenerating(false);
     }
@@ -165,26 +177,68 @@ export default function SessionPage() {
     fetchSession();
   }, [fetchSession]);
 
-  const speakLastMessage = () => {
-    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
-    if (lastAssistantMessage) {
-      speakMessage(lastAssistantMessage.id, lastAssistantMessage.content);
+  useEffect(() => {
+    let active = true;
+    fetch("/api/user/profile", { credentials: "include" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("Unable to load language preference");
+        return response.json();
+      })
+      .then(({ user }) => {
+        if (active && isStudyLanguageCode(user?.language)) setExplanationLanguage(user.language);
+      })
+      .catch((error) => console.error("Language preference error:", error));
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleLanguageChange = async (nextLanguage: string) => {
+    if (!isStudyLanguageCode(nextLanguage) || nextLanguage === explanationLanguage) return;
+
+    const previousLanguage = explanationLanguage;
+    setExplanationLanguage(nextLanguage);
+    setIsSavingLanguage(true);
+    setSpeechNotice(null);
+
+    try {
+      const response = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ language: nextLanguage }),
+      });
+      if (!response.ok) throw new Error("Could not save your language preference");
+    } catch (error) {
+      setExplanationLanguage(previousLanguage);
+      alert(error instanceof Error ? error.message : "Could not save your language preference");
+    } finally {
+      setIsSavingLanguage(false);
     }
   };
 
-  const sendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isLoading) return;
+  const speakLastMessage = () => {
+    const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
+    if (lastAssistantMessage) {
+      speakMessage(lastAssistantMessage.id, lastAssistantMessage.content, lastAssistantMessage.metadata?.language || "en");
+    }
+  };
+
+  const submitMessage = async (rawContent: string, clearComposer = false) => {
+    const content = rawContent.trim();
+    if (!content || isLoading) return;
+    const responseLanguage = explanationLanguage;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: "user",
-      content: input,
+      content,
       createdAt: new Date().toISOString(),
     };
 
     setMessages((prev) => [...prev, userMessage]);
-    setInput("");
+    if (clearComposer) setInput("");
     setIsLoading(true);
     const assistantMessageId = crypto.randomUUID();
 
@@ -192,7 +246,7 @@ export default function SessionPage() {
       const res = await fetch(`/api/sessions/${sessionId}/messages`, { credentials: "include",
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content: input, stream: true }),
+        body: JSON.stringify({ content, stream: true, language: responseLanguage }),
       });
 
       if (!res.ok) throw new Error("Failed to send message");
@@ -204,6 +258,7 @@ export default function SessionPage() {
         id: assistantMessageId,
         role: "assistant",
         content: "",
+        metadata: { language: responseLanguage },
         createdAt: new Date().toISOString(),
       };
       setMessages((prev) => [...prev, assistantMessage]);
@@ -230,10 +285,19 @@ export default function SessionPage() {
     }
   };
 
+  const sendMessage = (event: React.FormEvent) => {
+    event.preventDefault();
+    void submitMessage(input, true);
+  };
+
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const speakMessage = (messageId: string, text: string) => {
-    if (!("speechSynthesis" in window)) return;
+  const speakMessage = (messageId: string, text: string, languageCode: StudyLanguageCode) => {
+    const language = getStudyLanguage(languageCode);
+    if (!("speechSynthesis" in window)) {
+      setSpeechNotice("Read aloud is not supported by this browser.");
+      return;
+    }
 
     if (speakingMessageId === messageId) {
       window.speechSynthesis.cancel();
@@ -245,6 +309,14 @@ export default function SessionPage() {
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text.slice(0, 4096));
+    utterance.lang = language.speechLocale;
+    const availableVoices = window.speechSynthesis.getVoices();
+    const voice = availableVoices.find((candidate) => candidate.lang.toLowerCase() === language.speechLocale.toLowerCase())
+      || availableVoices.find((candidate) => candidate.lang.toLowerCase().startsWith(language.code.toLowerCase()));
+    if (voice) utterance.voice = voice;
+    setSpeechNotice(availableVoices.length > 0 && !voice
+      ? `${language.name} text is ready, but this device has no dedicated ${language.name} voice. The browser may use its fallback voice.`
+      : null);
     speechRef.current = utterance;
     setSpeakingMessageId(messageId);
 
@@ -253,7 +325,10 @@ export default function SessionPage() {
       setSpeakingMessageId(null);
     };
     utterance.onend = finish;
-    utterance.onerror = finish;
+    utterance.onerror = () => {
+      finish();
+      setSpeechNotice(`This browser could not read the ${language.name} response aloud.`);
+    };
     window.speechSynthesis.speak(utterance);
   };
 
@@ -354,6 +429,46 @@ export default function SessionPage() {
             </Tabs>
           </div>
 
+          {activeTab === "chat" && (
+            <section className="flex flex-col gap-3 border-b bg-primary/5 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" aria-label="Professor conversation controls">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                  <GraduationCap className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <p className="font-medium">Professor MindForge</p>
+                  <p className="text-xs text-muted-foreground">Source-grounded tutoring that explains, responds, and checks your understanding.</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="space-y-1">
+                  <label htmlFor="explanation-language" className="block text-xs font-medium text-muted-foreground">Explanation language</label>
+                  <select
+                    id="explanation-language"
+                    value={explanationLanguage}
+                    onChange={(event) => void handleLanguageChange(event.target.value)}
+                    disabled={isLoading || isSavingLanguage}
+                    className="min-w-44 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {STUDY_LANGUAGES.map((language) => (
+                      <option key={language.code} value={language.code}>{language.name} · {language.nativeName}</option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isLoading || isSavingLanguage || !messages.some((message) => message.role === "assistant")}
+                  onClick={() => void submitMessage(`Please re-explain your previous answer in ${getStudyLanguage(explanationLanguage).name}. Keep it conversational and grounded in my materials.`)}
+                >
+                  <Languages className="mr-2 h-4 w-4" />
+                  Re-explain last answer
+                </Button>
+              </div>
+            </section>
+          )}
+
           {/* Chat Tab */}
           {activeTab === "chat" && (
             <div className="flex-1 flex flex-col overflow-hidden">
@@ -361,8 +476,8 @@ export default function SessionPage() {
                 {messages.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
                     <Sparkles className="h-12 w-12 mb-4 text-primary/50" />
-                    <h3 className="text-lg font-medium">Start a conversation</h3>
-                    <p className="text-sm mt-1">Ask questions about your uploaded materials</p>
+                    <h3 className="text-lg font-medium">Meet your professor</h3>
+                    <p className="text-sm mt-1">Ask a question, request an example, or test your understanding.</p>
                   </div>
                 ) : (
                   <>
@@ -377,7 +492,7 @@ export default function SessionPage() {
                     {isLoading && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>AI is thinking...</span>
+                        <span>Professor MindForge is preparing an explanation...</span>
                       </div>
                     )}
                   </>
@@ -392,7 +507,7 @@ export default function SessionPage() {
                     ref={textareaRef}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Ask a question about your materials..."
+                    placeholder={`Ask Professor MindForge in ${getStudyLanguage(explanationLanguage).name}...`}
                     rows={1}
                     className="flex-1 resize-none min-h-[44px] max-h-32"
                     disabled={isLoading}
@@ -402,8 +517,10 @@ export default function SessionPage() {
                   </Button>
                 </form>
                 <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Gemini free tier · Relevant material is sent to Google and may be used to improve its products
+                  Answers use {getStudyLanguage(explanationLanguage).name} · Read-aloud voice availability depends on your browser and device
                 </p>
+                {speechNotice && <p className="mt-1 text-center text-xs text-amber-700 dark:text-amber-300" role="status">{speechNotice}</p>}
+                <p className="mt-1 text-center text-xs text-muted-foreground">Gemini free tier · Relevant material is sent to Google and may be used to improve its products</p>
               </div>
             </div>
           )}
@@ -454,8 +571,8 @@ export default function SessionPage() {
               <StudyToolCard
                 icon={<Languages className="h-6 w-6" />}
                 title="Multilingual Explanation"
-                description="Translate your material into a selected language"
-                action="Translate"
+                description={`Explain your material in ${getStudyLanguage(explanationLanguage).name}`}
+                action={`Explain in ${getStudyLanguage(explanationLanguage).name}`}
                 onClick={() => generateStudyTool("translate")}
                 disabled={isGenerating}
               />
@@ -475,7 +592,11 @@ export default function SessionPage() {
               {studyToolResult && (
                 <div className="rounded-lg border bg-muted/50 p-4">
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <h3 className="font-semibold capitalize">{studyToolResult.tool} Result</h3>
+                    <h3 className="font-semibold capitalize">
+                      {studyToolResult.tool === "translate" && studyToolResult.language
+                        ? `${getStudyLanguage(studyToolResult.language).name} Explanation`
+                        : `${studyToolResult.tool} Result`}
+                    </h3>
                     <div className="flex items-center gap-2">
                       <Button variant="ghost" size="sm" onClick={() => handleExport("pdf", studyToolResult.tool)} disabled={exportProgress.active}>
                         <FileText className="h-4 w-4" />
@@ -569,13 +690,19 @@ export default function SessionPage() {
   );
 }
 
-function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onSpeak: (id: string, text: string) => void; speakingId: string | null }) {
+function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onSpeak: (id: string, text: string, language: StudyLanguageCode) => void; speakingId: string | null }) {
   const isUser = message.role === "user";
+  const language = getStudyLanguage(message.metadata?.language || "en");
+  const sources = message.sources || message.metadata?.sources;
 
   return (
     <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "")}>
-      {!isUser && <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0"><Sparkles className="h-4 w-4 text-primary" /></div>}
-      <div className={cn("max-w-[70%] flex flex-col gap-1", isUser ? "items-end" : "items-start")}>
+      {!isUser && <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true"><GraduationCap className="h-4 w-4 text-primary-foreground" /></div>}
+      <div className={cn("max-w-[85%] sm:max-w-[75%] flex flex-col gap-1", isUser ? "items-end" : "items-start")}>
+        <div className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
+          <span>{isUser ? "Student" : "Professor MindForge"}</span>
+          {!isUser && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">{language.name}</span>}
+        </div>
         <div
           className={cn(
             "px-4 py-2 rounded-2xl",
@@ -593,8 +720,8 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
               variant="ghost"
               size="icon"
               className="h-6 w-6 p-0"
-              aria-label={speakingId === message.id ? "Stop reading response" : "Read response aloud"}
-              onClick={() => onSpeak(message.id, message.content)}
+              aria-label={speakingId === message.id ? "Stop reading response" : `Read ${language.name} response aloud`}
+              onClick={() => onSpeak(message.id, message.content, language.code)}
             >
               {speakingId === message.id ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
             </Button>
@@ -611,9 +738,9 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
             </Button>
           )}
         </div>
-        {message.sources?.length && (
+        {!!sources?.length && (
           <div className="mt-2 ml-10 flex flex-wrap gap-1">
-            {message.sources.map((source, i) => (
+            {sources.map((source, i) => (
               <span key={i} className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded">
                 Source {i + 1}
               </span>
@@ -621,7 +748,7 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
           </div>
         )}
       </div>
-      {isUser && <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center flex-shrink-0"><LucideUser className="h-4 w-4" /></div>}
+      {isUser && <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center flex-shrink-0" aria-hidden="true"><LucideUser className="h-4 w-4" /></div>}
     </div>
   );
 }

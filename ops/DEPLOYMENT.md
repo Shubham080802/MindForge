@@ -30,6 +30,24 @@ Deploy the immutable build, then require `/api/health` to return HTTP 200 before
 
 The production Vercel deployment registers the daily `GET /api/internal/retention` schedule from `vercel.json`; Vercel supplies `Authorization: Bearer $CRON_SECRET`. Alert on any non-200 response. Other schedulers may call `POST` with the same authorization header.
 
+## Alert delivery drill
+
+After configuring the monitoring webhook, send a clearly labeled synthetic
+event through the production application. The endpoint is protected by the same
+`CRON_SECRET` used for scheduled maintenance and never returns the webhook URL,
+token, or response body:
+
+```bash
+curl --fail-with-body --request POST \
+  --header "Authorization: Bearer $CRON_SECRET" \
+  https://mind-forge-ashy.vercel.app/api/internal/alert-test
+```
+
+Record the returned correlation ID, HTTP acceptance status, and delivery
+latency. Then have the on-call owner confirm that the labeled
+`operations.alert_test` event is visible in the human-facing destination.
+Endpoint acceptance proves transport only; it is not human-delivery proof.
+
 ## Authentication rollback
 
 The `clerkId` migration is additive. A release can be rolled back without
@@ -44,3 +62,9 @@ Roll application traffic back to the previous immutable image. Prisma migrations
 ## Backup drill
 
 Quarterly, restore the latest managed backup into an isolated database. Run `prisma migrate status`, compare user/session/material counts, verify one owned material download, and record recovery-point and recovery-time results. Never test restores against production.
+
+The Supabase Free plan has no scheduled backups or restore-to-new-project
+facility. Until the project is upgraded, create encrypted off-site logical
+backups with `supabase db dump` or `pg_dump` and prove recovery into an isolated
+PostgreSQL target. This is an application-data recovery control, not evidence
+for Supabase managed-backup or PITR recovery.

@@ -4,6 +4,7 @@ export function routeAccess(pathname: string) {
   );
   const isProtectedApi = pathname.startsWith("/api/")
     && pathname !== "/api/internal/retention"
+    && pathname !== "/api/internal/alert-test"
     && pathname !== "/api/health";
 
   return { requiresAuthentication: isProtectedPage || isProtectedApi };

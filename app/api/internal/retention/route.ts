@@ -1,16 +1,11 @@
-import crypto from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { hasValidBearerSecret } from "@/lib/internal-auth";
 
 export const runtime = "nodejs";
 
 function authorized(request: NextRequest) {
-  const configured = process.env.CRON_SECRET;
-  const supplied = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (!configured || !supplied) return false;
-  const expected = Buffer.from(configured);
-  const actual = Buffer.from(supplied);
-  return expected.length === actual.length && crypto.timingSafeEqual(expected, actual);
+  return hasValidBearerSecret(request.headers.get("authorization"), process.env.CRON_SECRET);
 }
 
 export async function POST(request: NextRequest) {

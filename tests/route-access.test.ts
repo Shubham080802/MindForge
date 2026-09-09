@@ -7,9 +7,10 @@ describe("route access policy", () => {
     (pathname) => expect(routeAccess(pathname).requiresAuthentication).toBe(true),
   );
 
-  it("keeps readiness, retention, and Clerk pages public", () => {
+  it("keeps readiness, operator-secret, and Clerk pages public", () => {
     expect(routeAccess("/api/health").requiresAuthentication).toBe(false);
     expect(routeAccess("/api/internal/retention").requiresAuthentication).toBe(false);
+    expect(routeAccess("/api/internal/alert-test").requiresAuthentication).toBe(false);
     expect(routeAccess("/auth/signin").requiresAuthentication).toBe(false);
     expect(routeAccess("/auth/signup").requiresAuthentication).toBe(false);
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadSpeechVoices, selectSpeechVoice } from "@/lib/speech-voices";
+import { getSpeechErrorNotice, loadSpeechVoices, selectSpeechVoice } from "@/lib/speech-voices";
 
 function voice(name: string, lang: string): SpeechSynthesisVoice {
   return { name, lang } as SpeechSynthesisVoice;
@@ -47,5 +47,17 @@ describe("speech voice loading", () => {
     const english = voice("Samantha", "en-US");
 
     expect(selectSpeechVoice([english], "hi-IN", "hi")).toBeNull();
+  });
+});
+
+describe("speech playback errors", () => {
+  it.each(["canceled", "interrupted"])("does not report a user %s action as a failure", (errorCode) => {
+    expect(getSpeechErrorNotice(errorCode, "Hindi")).toBeNull();
+  });
+
+  it("keeps genuine failures visible and actionable", () => {
+    expect(getSpeechErrorNotice("voice-unavailable", "Hindi")).toMatch(/Hindi voice playback became unavailable/);
+    expect(getSpeechErrorNotice("not-allowed", "Hindi")).toMatch(/Allow audio playback/);
+    expect(getSpeechErrorNotice("synthesis-failed", "Hindi")).toMatch(/synthesis-failed/);
   });
 });

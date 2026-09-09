@@ -60,3 +60,21 @@ export function selectSpeechVoice(
     })
     ?? null;
 }
+
+export function getSpeechErrorNotice(errorCode: string, languageName: string): string | null {
+  if (errorCode === "canceled" || errorCode === "interrupted") return null;
+
+  if (errorCode === "language-unavailable" || errorCode === "voice-unavailable") {
+    return `${languageName} voice playback became unavailable. Refresh the page and try again.`;
+  }
+
+  if (errorCode === "not-allowed") {
+    return `Allow audio playback in this browser to read the ${languageName} response aloud.`;
+  }
+
+  if (errorCode === "audio-busy" || errorCode === "audio-hardware") {
+    return `Your audio device is currently unavailable. Close other audio playback and try ${languageName} read-aloud again.`;
+  }
+
+  return `${languageName} read-aloud failed (${errorCode || "unknown error"}). Please try again.`;
+}

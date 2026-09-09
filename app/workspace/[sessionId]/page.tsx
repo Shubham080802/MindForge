@@ -22,7 +22,7 @@ import { ExplanationLanguagePicker } from "@/components/explanation-language-pic
 import { useStudyLanguage } from "@/hooks/use-study-language";
 import { evaluateStudyScope } from "@/lib/study-scope";
 import { shouldSubmitComposer } from "@/lib/chat-composer";
-import { loadSpeechVoices, selectSpeechVoice } from "@/lib/speech-voices";
+import { getSpeechErrorNotice, loadSpeechVoices, selectSpeechVoice } from "@/lib/speech-voices";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -280,12 +280,14 @@ export default function SessionPage() {
     }
 
     if (speakingMessageId === messageId) {
-      window.speechSynthesis.cancel();
       speechRef.current = null;
       setSpeakingMessageId(null);
+      setSpeechNotice(null);
+      window.speechSynthesis.cancel();
       return;
     }
 
+    speechRef.current = null;
     window.speechSynthesis.cancel();
 
     const utterance = new SpeechSynthesisUtterance(text.slice(0, 4096));
@@ -307,13 +309,15 @@ export default function SessionPage() {
     setSpeakingMessageId(messageId);
 
     const finish = () => {
-      if (speechRef.current === utterance) speechRef.current = null;
+      if (speechRef.current !== utterance) return false;
+      speechRef.current = null;
       setSpeakingMessageId(null);
+      return true;
     };
     utterance.onend = finish;
-    utterance.onerror = () => {
-      finish();
-      setSpeechNotice(`This browser could not read the ${language.name} response aloud.`);
+    utterance.onerror = (event) => {
+      if (!finish()) return;
+      setSpeechNotice(getSpeechErrorNotice(event.error, language.name));
     };
     window.speechSynthesis.speak(utterance);
   };

@@ -268,7 +268,7 @@ evidence, not as the current production state.
 
 ## Evidence captured in this pass
 
-- `vitest`: 15 files, 50 behavioral tests passing.
+- `vitest`: 15 files, 53 behavioral tests passing.
 - TypeScript: no errors after regenerating current Prisma and Next route types.
 - ESLint: clean, with only the repository's known legacy-config deprecation warning.
 - Next.js production build: successful across 28 page/API routes and middleware.

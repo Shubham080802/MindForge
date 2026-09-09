@@ -3,9 +3,9 @@ import { BookOpen, Download, FileSearch, Mic, ShieldCheck, Sparkles } from "luci
 
 const capabilities = [
   [FileSearch, "Material extraction", "Extract text from PDF, DOCX, Markdown, plain text, and common image formats using OCR."],
-  [Sparkles, "Contextual tutor", "Ask questions against the material and conversation history stored in a private study session."],
+  [Sparkles, "Professor–student tutor", "Have a responsive teaching conversation grounded in the material and history stored in your private study session."],
   [BookOpen, "Study tools", "Generate summaries, key concepts, flashcards, quizzes, study plans, and translations."],
-  [Mic, "Speech", "Listen to supported responses using your browser's built-in speech engine."],
+  [Mic, "Multilingual speech", "Choose the explanation language and listen using a matching browser voice when your device provides one."],
   [Download, "Exports", "Download source files and export sessions or individual study-tool results."],
   [ShieldCheck, "Owned data", "Every session and material lookup is scoped to the signed-in account."],
 ] as const;

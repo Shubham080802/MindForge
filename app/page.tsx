@@ -15,12 +15,12 @@ const features = [
   {
     icon: BookOpen,
     title: "Focused learning tools",
-    description: "Turn a session into summaries, key concepts, flashcards, quizzes, study plans, and translations without leaving the workspace.",
+    description: "Learn through a professor–student dialogue, then create summaries, key concepts, quizzes, study plans, and multilingual explanations.",
   },
   {
     icon: Mic,
-    title: "Voice playback",
-    description: "Listen with your browser's built-in speech engine and download sessions or generated study aids for offline review.",
+    title: "Multilingual voice playback",
+    description: "Choose your explanation language and listen with a matching browser voice when your device supports one.",
   },
 ];
 

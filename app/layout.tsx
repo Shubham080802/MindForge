@@ -8,8 +8,8 @@ import { ErrorBoundary } from "@/components/ui/error-boundary";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "MindForge - AI Study Assistant",
-  description: "Upload study materials, get detailed explanations, and interact with an AI assistant.",
+  title: "MindForge - Your AI Professor",
+  description: "Upload study materials and learn through source-grounded professor–student conversations in your chosen language.",
   icons: { icon: "/favicon.svg" },
   manifest: "/site.webmanifest",
 };

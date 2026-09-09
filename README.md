@@ -7,8 +7,9 @@ Clerk, Prisma, PostgreSQL, Google Gemini, and Upstash Redis.
 
 - Clerk-managed verified accounts and configurable social sign-in
 - Private PDF, DOCX, text, Markdown, and image/OCR material ingestion
-- Account-scoped sessions, contextual chat, search, source downloads, and deletion
-- Summaries, concepts, flashcards, quizzes, study plans, translation, and speech
+- Account-scoped sessions, professor–student tutoring, search, source downloads, and deletion
+- Student-controlled multilingual explanations and matching browser speech voices
+- Summaries, concepts, flashcards, quizzes, study plans, and translation
 - JSON, Markdown, and PDF exports
 - Profile preferences, theme control, account deletion, legal and support pages
 - Distributed production rate limits, audit events, structured error delivery,

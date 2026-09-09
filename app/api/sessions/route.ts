@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { sessionCreateInput } from "@/lib/validation";
 import { recordAudit } from "@/lib/audit";
+import { enforceStudyScope } from "@/lib/study-scope-server";
+import { enforceRateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -12,6 +14,17 @@ export async function POST(request: NextRequest) {
     if ("error" in auth) return auth.error;
 
     const { title, initialQuery, materialIds } = await parseJson(request, sessionCreateInput);
+
+    if (initialQuery) {
+      await enforceRateLimit(request, "ai", auth.userId);
+      const scope = await enforceStudyScope(initialQuery);
+      if (!scope.allowed) {
+        return NextResponse.json(
+          { message: scope.message, code: "STUDY_SCOPE_REQUIRED" },
+          { status: "unavailable" in scope ? 503 : 422 },
+        );
+      }
+    }
 
     if (materialIds?.length) {
       const available = await prisma.material.count({

@@ -11,6 +11,8 @@ describe("professor prompt", () => {
     expect(prompt).toContain("Material 1");
     expect(prompt).toContain("Gradient descent");
     expect(prompt).toContain("untrusted reference text");
+    expect(prompt).toContain("Only help with learning");
+    expect(prompt).toContain("do not provide the requested information");
   });
 
   it("clearly labels general-knowledge teaching when no source is available", () => {

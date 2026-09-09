@@ -7,6 +7,7 @@ import { sessionMessageInput } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { reportServerError } from "@/lib/observability";
 import { buildProfessorPrompt } from "@/lib/professor-prompt";
+import { enforceStudyScope } from "@/lib/study-scope-server";
 
 export const runtime = "nodejs";
 
@@ -41,6 +42,13 @@ export async function POST(
 
     if (!sessionData) {
       return NextResponse.json({ message: "Session not found" }, { status: 404 });
+    }
+    const scope = await enforceStudyScope(content);
+    if (!scope.allowed) {
+      return NextResponse.json(
+        { message: scope.message, code: "STUDY_SCOPE_REQUIRED" },
+        { status: "unavailable" in scope ? 503 : 422 },
+      );
     }
     const ai = getAIClient();
 

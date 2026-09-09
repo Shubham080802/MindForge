@@ -57,6 +57,16 @@ export function pcmToWav(
   return wav;
 }
 
+function l16ToLittleEndian(l16: Uint8Array): Uint8Array {
+  const pcm = Uint8Array.from(l16);
+  for (let index = 0; index + 1 < pcm.byteLength; index += 2) {
+    const highByte = pcm[index]!;
+    pcm[index] = pcm[index + 1]!;
+    pcm[index + 1] = highByte;
+  }
+  return pcm;
+}
+
 export function splitSpeechText(text: string, maxLength = SPEECH_CHUNK_LENGTH): string[] {
   if (maxLength < 1) throw new Error("Speech chunk length must be positive");
   const normalized = text.replaceAll(/\s+/g, " ").trim();
@@ -161,7 +171,11 @@ export async function generateGeminiSpeech({
   const audio = findAudio(body);
   if (!audio) throw new Error("Gemini speech returned no audio");
   const decoded = Buffer.from(audio.data, "base64");
-  if (audio.mimeType === "audio/wav") return decoded;
+  if (audio.mimeType?.toLowerCase().startsWith("audio/wav")) return decoded;
 
-  return pcmToWav(decoded, audio.sampleRate || 24_000, audio.channels || 1);
+  const pcm = audio.mimeType?.toLowerCase().startsWith("audio/l16")
+    ? l16ToLittleEndian(decoded)
+    : decoded;
+
+  return pcmToWav(pcm, audio.sampleRate || 24_000, audio.channels || 1);
 }

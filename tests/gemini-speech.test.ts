@@ -52,6 +52,28 @@ describe("Gemini speech generation", () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it("converts network-order L16 samples to little-endian WAV samples", async () => {
+    const fetcher = vi.fn(async () => new Response(JSON.stringify({
+      steps: [{
+        type: "model_output",
+        content: [{
+          type: "audio",
+          data: Buffer.from([0x12, 0x34, 0xab, 0xcd]).toString("base64"),
+          mime_type: "audio/l16; rate=24000; channels=1",
+        }],
+      }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const audio = await generateGeminiSpeech({
+      text: "नमस्ते विद्यार्थी",
+      locale: "hi-IN",
+      apiKey: "test-key",
+      fetcher,
+    });
+
+    expect([...audio.subarray(44)]).toEqual([0x34, 0x12, 0xcd, 0xab]);
+  });
+
   it("chunks a full explanation without losing content", () => {
     const text = `${"पहला वाक्य। ".repeat(40)}${"दूसरा वाक्य। ".repeat(40)}`.trim();
     const chunks = splitSpeechText(text, 240);

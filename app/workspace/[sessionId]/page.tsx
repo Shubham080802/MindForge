@@ -23,6 +23,7 @@ import { useStudyLanguage } from "@/hooks/use-study-language";
 import { evaluateStudyScope } from "@/lib/study-scope";
 import { shouldSubmitComposer } from "@/lib/chat-composer";
 import { getSpeechErrorNotice, loadSpeechVoices, selectSpeechVoice } from "@/lib/speech-voices";
+import { playDecodedAudio } from "@/lib/browser-audio";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -86,8 +87,7 @@ export default function SessionPage() {
   const [exportProgress, setExportProgress] = useState<{ active: boolean; format?: string }>({ active: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
-  const speechAudioUrlRef = useRef<string | null>(null);
+  const speechAudioContextRef = useRef<AudioContext | null>(null);
   const speechRequestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -96,8 +96,7 @@ export default function SessionPage() {
     }
     return () => {
       speechRequestRef.current?.abort();
-      speechAudioRef.current?.pause();
-      if (speechAudioUrlRef.current) URL.revokeObjectURL(speechAudioUrlRef.current);
+      void speechAudioContextRef.current?.close();
       window.speechSynthesis?.cancel();
     };
   }, []);
@@ -283,33 +282,13 @@ export default function SessionPage() {
   const stopSpeech = () => {
     speechRequestRef.current?.abort();
     speechRequestRef.current = null;
-    speechAudioRef.current?.pause();
-    speechAudioRef.current = null;
-    if (speechAudioUrlRef.current) URL.revokeObjectURL(speechAudioUrlRef.current);
-    speechAudioUrlRef.current = null;
+    void speechAudioContextRef.current?.close();
+    speechAudioContextRef.current = null;
     speechRef.current = null;
     window.speechSynthesis?.cancel();
     setSpeakingMessageId(null);
     setSpeechNotice(null);
   };
-
-  const playAudio = (audio: HTMLAudioElement, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
-    const finish = () => {
-      signal.removeEventListener("abort", handleAbort);
-      resolve();
-    };
-    const handleAbort = () => {
-      audio.pause();
-      finish();
-    };
-    signal.addEventListener("abort", handleAbort, { once: true });
-    audio.onended = finish;
-    audio.onerror = () => {
-      signal.removeEventListener("abort", handleAbort);
-      reject(new Error("The generated audio could not be played"));
-    };
-    void audio.play().catch(reject);
-  });
 
   const speakMessage = async (messageId: string, text: string, languageCode: StudyLanguageCode) => {
     const language = getStudyLanguage(languageCode);
@@ -322,12 +301,21 @@ export default function SessionPage() {
     stopSpeech();
 
     if (language.code !== "en") {
+      if (!("AudioContext" in window)) {
+        setSpeechNotice("This browser cannot play generated professor audio.");
+        return;
+      }
+
       const controller = new AbortController();
+      const audioContext = new AudioContext();
+      const contextReady = audioContext.resume();
       speechRequestRef.current = controller;
+      speechAudioContextRef.current = audioContext;
       setSpeakingMessageId(messageId);
       setSpeechNotice(`Preparing ${language.name} professor audio…`);
 
       try {
+        await contextReady;
         let chunkIndex = 0;
         let chunkCount = 1;
 
@@ -345,22 +333,11 @@ export default function SessionPage() {
           }
 
           chunkCount = Number(response.headers.get("X-Speech-Chunk-Count")) || 1;
-          const blob = await response.blob();
+          const audioData = await response.arrayBuffer();
           if (controller.signal.aborted) return;
 
-          const audioUrl = URL.createObjectURL(blob);
-          const audio = new Audio(audioUrl);
-          audio.lang = language.speechLocale;
-          speechAudioRef.current = audio;
-          speechAudioUrlRef.current = audioUrl;
           setSpeechNotice(`Reading in ${language.name} with Gemini voice · Part ${chunkIndex + 1} of ${chunkCount}`);
-          await playAudio(audio, controller.signal);
-
-          if (speechAudioUrlRef.current === audioUrl) {
-            URL.revokeObjectURL(audioUrl);
-            speechAudioUrlRef.current = null;
-            speechAudioRef.current = null;
-          }
+          await playDecodedAudio(audioContext, audioData, controller.signal);
           chunkIndex += 1;
         }
 
@@ -374,6 +351,10 @@ export default function SessionPage() {
         setSpeechNotice(error instanceof Error ? error.message : `${language.name} audio could not be generated`);
       } finally {
         if (speechRequestRef.current === controller) speechRequestRef.current = null;
+        if (speechAudioContextRef.current === audioContext) {
+          speechAudioContextRef.current = null;
+          void audioContext.close();
+        }
       }
       return;
     }

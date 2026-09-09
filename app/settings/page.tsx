@@ -4,14 +4,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
-import { AlertCircle, CheckCircle, Loader2, Palette, Save, User } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle, Loader2, Palette, Save, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
-import { STUDY_LANGUAGES } from "@/lib/study-languages";
 
 export default function SettingsPage() {
   const { user } = useUser();
@@ -20,7 +19,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("profile");
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-  const [profile, setProfile] = useState({ name: "", email: "", language: "en" });
+  const [profile, setProfile] = useState({ name: "", email: "" });
 
   useEffect(() => {
     void fetch("/api/user/profile")
@@ -28,7 +27,7 @@ export default function SettingsPage() {
         if (!response.ok) throw new Error("Profile could not be loaded");
         return response.json();
       })
-      .then(({ user }) => setProfile({ name: user.name || "", email: user.email || "", language: user.language || "en" }))
+      .then(({ user }) => setProfile({ name: user.name || "", email: user.email || "" }))
       .catch(() => setProfile((current) => ({
         ...current,
         name: user?.fullName || "",
@@ -43,7 +42,7 @@ export default function SettingsPage() {
       const response = await fetch("/api/user/profile", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: profile.name, language: profile.language }),
+        body: JSON.stringify({ name: profile.name }),
       });
       if (!response.ok) throw new Error("Profile could not be updated");
       await user?.reload();
@@ -70,7 +69,7 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b"><div className="container flex h-16 items-center px-4"><Link href="/" className="text-xl font-semibold"><span className="text-primary">Mind</span>Forge</Link></div></header>
+      <header className="border-b"><div className="container flex h-16 items-center justify-between px-4"><Link href="/" className="text-xl font-semibold"><span className="text-primary">Mind</span>Forge</Link><Button variant="outline" size="sm" asChild><Link href="/workspace"><ArrowLeft className="mr-2 h-4 w-4" />Back to workspace</Link></Button></div></header>
       <main className="container px-4 py-8">
         <div className="mx-auto max-w-3xl">
           <h1 className="text-3xl font-bold tracking-tight">Settings</h1>
@@ -86,10 +85,9 @@ export default function SettingsPage() {
             </TabsList>
 
             <TabsContent value="profile" className="mt-6">
-              <Card><CardHeader><CardTitle>Profile information</CardTitle><CardDescription>Update your display name and study language.</CardDescription></CardHeader><CardContent className="space-y-4">
+              <Card><CardHeader><CardTitle>Profile information</CardTitle><CardDescription>Update the display name shown throughout MindForge.</CardDescription></CardHeader><CardContent className="space-y-4">
                 <div className="space-y-2"><Label htmlFor="name">Name</Label><Input id="name" value={profile.name} onChange={(event) => setProfile({ ...profile, name: event.target.value })} /></div>
                 <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" value={profile.email} disabled className="bg-muted" /></div>
-                <div className="space-y-2"><Label htmlFor="language">Explanation language</Label><select id="language" value={profile.language} onChange={(event) => setProfile({ ...profile, language: event.target.value })} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">{STUDY_LANGUAGES.map((language) => <option key={language.code} value={language.code}>{language.name} · {language.nativeName}</option>)}</select><p className="text-xs text-muted-foreground">Your professor uses this language by default. You can change it inside any study session.</p></div>
                 <Button onClick={saveProfile} disabled={isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save changes</Button>
               </CardContent></Card>
             </TabsContent>

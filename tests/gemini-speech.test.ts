@@ -29,7 +29,16 @@ describe("Gemini speech generation", () => {
 
   it("returns a WAV response from Gemini audio data", async () => {
     const fetcher = vi.fn(async () => new Response(JSON.stringify({
-      output_audio: { data: Buffer.from([1, 2, 3, 4]).toString("base64") },
+      steps: [{
+        type: "model_output",
+        content: [{
+          type: "audio",
+          data: Buffer.from([1, 2, 3, 4]).toString("base64"),
+          mime_type: "audio/l16",
+          sample_rate: 24_000,
+          channels: 1,
+        }],
+      }],
     }), { status: 200, headers: { "Content-Type": "application/json" } }));
 
     const audio = await generateGeminiSpeech({

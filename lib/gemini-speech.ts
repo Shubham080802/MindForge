@@ -24,6 +24,7 @@ export function buildGeminiSpeechRequest(text: string, locale: string) {
     generation_config: {
       speech_config: [{ voice: "Charon", language: locale }],
     },
+    store: false,
   };
 }
 
@@ -115,18 +116,52 @@ export async function generateGeminiSpeech({
     body: JSON.stringify(buildGeminiSpeechRequest(text, locale)),
     signal: AbortSignal.timeout(30_000),
   });
-  const body = await response.json() as {
-    output_audio?: { data?: string };
-    outputAudio?: { data?: string };
-    error?: { status?: string };
-  };
+  const body = await response.json() as unknown;
 
   if (!response.ok) {
-    throw new Error(`Gemini speech request failed (${body.error?.status || response.status})`);
+    const errorStatus = body && typeof body === "object" && "error" in body
+      ? (body as { error?: { status?: string } }).error?.status
+      : undefined;
+    throw new Error(`Gemini speech request failed (${errorStatus || response.status})`);
   }
 
-  const encodedAudio = body.output_audio?.data ?? body.outputAudio?.data;
-  if (!encodedAudio) throw new Error("Gemini speech returned no audio");
+  const findAudio = (value: unknown): { data: string; mimeType?: string; sampleRate?: number; channels?: number } | null => {
+    if (!value || typeof value !== "object") return null;
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const audio = findAudio(item);
+        if (audio) return audio;
+      }
+      return null;
+    }
 
-  return pcmToWav(Buffer.from(encodedAudio, "base64"));
+    const record = value as Record<string, unknown>;
+    if (record.type === "audio" && typeof record.data === "string") {
+      return {
+        data: record.data,
+        mimeType: typeof record.mime_type === "string" ? record.mime_type : undefined,
+        sampleRate: typeof record.sample_rate === "number" ? record.sample_rate : undefined,
+        channels: typeof record.channels === "number" ? record.channels : undefined,
+      };
+    }
+    if (record.output_audio && typeof record.output_audio === "object") {
+      const output = record.output_audio as Record<string, unknown>;
+      if (typeof output.data === "string") {
+        return { data: output.data };
+      }
+    }
+
+    for (const nested of Object.values(record)) {
+      const audio = findAudio(nested);
+      if (audio) return audio;
+    }
+    return null;
+  };
+
+  const audio = findAudio(body);
+  if (!audio) throw new Error("Gemini speech returned no audio");
+  const decoded = Buffer.from(audio.data, "base64");
+  if (audio.mimeType === "audio/wav") return decoded;
+
+  return pcmToWav(decoded, audio.sampleRate || 24_000, audio.channels || 1);
 }

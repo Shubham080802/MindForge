@@ -85,11 +85,21 @@ export default function SessionPage() {
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
   const [exportProgress, setExportProgress] = useState<{ active: boolean; format?: string }>({ active: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const speechAudioRef = useRef<HTMLAudioElement | null>(null);
+  const speechAudioUrlRef = useRef<string | null>(null);
+  const speechRequestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if ("speechSynthesis" in window) {
       void loadSpeechVoices(window.speechSynthesis);
     }
+    return () => {
+      speechRequestRef.current?.abort();
+      speechAudioRef.current?.pause();
+      if (speechAudioUrlRef.current) URL.revokeObjectURL(speechAudioUrlRef.current);
+      window.speechSynthesis?.cancel();
+    };
   }, []);
 
   // Keyboard shortcuts for session page
@@ -270,20 +280,106 @@ export default function SessionPage() {
     void submitMessage(input, true);
   };
 
-  const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const stopSpeech = () => {
+    speechRequestRef.current?.abort();
+    speechRequestRef.current = null;
+    speechAudioRef.current?.pause();
+    speechAudioRef.current = null;
+    if (speechAudioUrlRef.current) URL.revokeObjectURL(speechAudioUrlRef.current);
+    speechAudioUrlRef.current = null;
+    speechRef.current = null;
+    window.speechSynthesis?.cancel();
+    setSpeakingMessageId(null);
+    setSpeechNotice(null);
+  };
+
+  const playAudio = (audio: HTMLAudioElement, signal: AbortSignal) => new Promise<void>((resolve, reject) => {
+    const finish = () => {
+      signal.removeEventListener("abort", handleAbort);
+      resolve();
+    };
+    const handleAbort = () => {
+      audio.pause();
+      finish();
+    };
+    signal.addEventListener("abort", handleAbort, { once: true });
+    audio.onended = finish;
+    audio.onerror = () => {
+      signal.removeEventListener("abort", handleAbort);
+      reject(new Error("The generated audio could not be played"));
+    };
+    void audio.play().catch(reject);
+  });
 
   const speakMessage = async (messageId: string, text: string, languageCode: StudyLanguageCode) => {
     const language = getStudyLanguage(languageCode);
-    if (!("speechSynthesis" in window)) {
-      setSpeechNotice("Read aloud is not supported by this browser.");
+
+    if (speakingMessageId === messageId) {
+      stopSpeech();
       return;
     }
 
-    if (speakingMessageId === messageId) {
-      speechRef.current = null;
-      setSpeakingMessageId(null);
-      setSpeechNotice(null);
-      window.speechSynthesis.cancel();
+    stopSpeech();
+
+    if (language.code !== "en") {
+      const controller = new AbortController();
+      speechRequestRef.current = controller;
+      setSpeakingMessageId(messageId);
+      setSpeechNotice(`Preparing ${language.name} professor audio…`);
+
+      try {
+        let chunkIndex = 0;
+        let chunkCount = 1;
+
+        while (chunkIndex < chunkCount && !controller.signal.aborted) {
+          const response = await fetch(`/api/sessions/${sessionId}/messages/${messageId}/speech`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ chunkIndex }),
+            signal: controller.signal,
+          });
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: "Hindi audio could not be generated" }));
+            throw new Error(error.message || `${language.name} audio could not be generated`);
+          }
+
+          chunkCount = Number(response.headers.get("X-Speech-Chunk-Count")) || 1;
+          const blob = await response.blob();
+          if (controller.signal.aborted) return;
+
+          const audioUrl = URL.createObjectURL(blob);
+          const audio = new Audio(audioUrl);
+          audio.lang = language.speechLocale;
+          speechAudioRef.current = audio;
+          speechAudioUrlRef.current = audioUrl;
+          setSpeechNotice(`Reading in ${language.name} with Gemini voice · Part ${chunkIndex + 1} of ${chunkCount}`);
+          await playAudio(audio, controller.signal);
+
+          if (speechAudioUrlRef.current === audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+            speechAudioUrlRef.current = null;
+            speechAudioRef.current = null;
+          }
+          chunkIndex += 1;
+        }
+
+        if (!controller.signal.aborted && speechRequestRef.current === controller) {
+          setSpeakingMessageId(null);
+          setSpeechNotice(`Finished reading in ${language.name}.`);
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        setSpeakingMessageId(null);
+        setSpeechNotice(error instanceof Error ? error.message : `${language.name} audio could not be generated`);
+      } finally {
+        if (speechRequestRef.current === controller) speechRequestRef.current = null;
+      }
+      return;
+    }
+
+    if (!("speechSynthesis" in window)) {
+      setSpeechNotice("Read aloud is not supported by this browser.");
       return;
     }
 
@@ -524,7 +620,7 @@ export default function SessionPage() {
                 </div>
                 {chatNotice && <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-center text-sm text-amber-900 dark:text-amber-100" role="alert">{chatNotice}</p>}
                 <p className="text-xs text-muted-foreground mt-2 text-center">
-                  Answers use {getStudyLanguage(explanationLanguage).name} · Read-aloud voice availability depends on your browser and device
+                  Answers use {getStudyLanguage(explanationLanguage).name} · Multilingual read-aloud uses Gemini professor audio
                 </p>
                 {speechNotice && <p className="mt-1 text-center text-xs text-amber-700 dark:text-amber-300" role="status">{speechNotice}</p>}
                 <p className="mt-1 text-center text-xs text-muted-foreground">Gemini free tier · Relevant material is sent to Google and may be used to improve its products</p>

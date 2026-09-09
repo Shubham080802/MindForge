@@ -92,6 +92,7 @@ retention request from `vercel.json`; other schedulers may call
 - [Deployment and rollback](ops/DEPLOYMENT.md)
 - [Incident response](ops/INCIDENT_RESPONSE.md)
 - [Data retention](ops/DATA_RETENTION.md)
+- [Operational readiness evidence](ops/OPERATIONAL_EVIDENCE_2026-09-09.md)
 
 Uploaded source bytes are stored in PostgreSQL for the initial bounded-volume
 release, with a 10 MB per-file and five-file per-batch limit. Use a managed,

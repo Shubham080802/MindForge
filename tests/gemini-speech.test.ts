@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   buildGeminiSpeechRequest,
+  FALLBACK_SPEECH_MODEL,
   generateGeminiSpeech,
   pcmToWav,
 } from "@/lib/gemini-speech";
@@ -71,6 +72,36 @@ describe("Gemini speech generation", () => {
     });
 
     expect([...audio.subarray(44)]).toEqual([0x34, 0x12, 0xcd, 0xab]);
+  });
+
+  it("falls back to the free Flash TTS model when the preview model is rate limited", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        error: { status: "RESOURCE_EXHAUSTED" },
+      }), { status: 429, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        steps: [{
+          type: "model_output",
+          content: [{
+            type: "audio",
+            data: Buffer.from([1, 2, 3, 4]).toString("base64"),
+            mime_type: "audio/l16",
+            sample_rate: 24_000,
+            channels: 1,
+          }],
+        }],
+      }), { status: 200, headers: { "Content-Type": "application/json" } }));
+
+    const audio = await generateGeminiSpeech({
+      text: "Read this in English",
+      locale: "en-US",
+      apiKey: "test-key",
+      fetcher,
+    });
+
+    expect(audio.subarray(0, 4).toString()).toBe("RIFF");
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(fetcher.mock.calls[1]![1]!.body as string).model).toBe(FALLBACK_SPEECH_MODEL);
   });
 
   it("chunks a full explanation without losing content", () => {

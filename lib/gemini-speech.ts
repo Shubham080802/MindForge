@@ -1,5 +1,6 @@
 const GEMINI_SPEECH_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/interactions";
 export const DEFAULT_SPEECH_MODEL = "gemini-3.1-flash-tts-preview";
+export const FALLBACK_SPEECH_MODEL = "gemini-2.5-flash-preview-tts";
 
 type Fetcher = typeof fetch;
 
@@ -10,9 +11,9 @@ interface GenerateGeminiSpeechOptions {
   fetcher?: Fetcher;
 }
 
-export function buildGeminiSpeechRequest(text: string, locale: string) {
+export function buildGeminiSpeechRequest(text: string, locale: string, model = DEFAULT_SPEECH_MODEL) {
   return {
-    model: DEFAULT_SPEECH_MODEL,
+    model,
     input: [
       "Read the transcript verbatim in a warm, clear professor voice.",
       `Use fluent ${locale} pronunciation. Do not translate, summarize, or add words.`,
@@ -72,16 +73,24 @@ export async function generateGeminiSpeech({
   apiKey,
   fetcher = fetch,
 }: GenerateGeminiSpeechOptions): Promise<Buffer> {
-  const response = await fetcher(GEMINI_SPEECH_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey,
-    },
-    body: JSON.stringify(buildGeminiSpeechRequest(text, locale)),
-    signal: AbortSignal.timeout(30_000),
-  });
-  const body = await response.json() as unknown;
+  const requestSpeech = async (model: string) => {
+    const response = await fetcher(GEMINI_SPEECH_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      body: JSON.stringify(buildGeminiSpeechRequest(text, locale, model)),
+      signal: AbortSignal.timeout(30_000),
+    });
+    return { response, body: await response.json() as unknown };
+  };
+
+  let result = await requestSpeech(DEFAULT_SPEECH_MODEL);
+  if (result.response.status === 429) {
+    result = await requestSpeech(FALLBACK_SPEECH_MODEL);
+  }
+  const { response, body } = result;
 
   if (!response.ok) {
     const errorStatus = body && typeof body === "object" && "error" in body

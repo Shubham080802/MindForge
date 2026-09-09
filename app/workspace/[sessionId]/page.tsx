@@ -17,7 +17,9 @@ import { formatDistanceToNow } from "date-fns";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { useKeyboardShortcuts, useSessionShortcuts } from "@/hooks/use-keyboard-shortcuts";
 import { readAIStream } from "@/lib/sse-stream";
-import { getStudyLanguage, isStudyLanguageCode, STUDY_LANGUAGES, type StudyLanguageCode } from "@/lib/study-languages";
+import { getStudyLanguage, type StudyLanguageCode } from "@/lib/study-languages";
+import { ExplanationLanguagePicker } from "@/components/explanation-language-picker";
+import { useStudyLanguage } from "@/hooks/use-study-language";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -71,8 +73,7 @@ export default function SessionPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [speechNotice, setSpeechNotice] = useState<string | null>(null);
-  const [explanationLanguage, setExplanationLanguage] = useState<StudyLanguageCode>("en");
-  const [isSavingLanguage, setIsSavingLanguage] = useState(false);
+  const { language: explanationLanguage, updateLanguage, isLoading: isLoadingLanguage, isSaving: isSavingLanguage, error: languageError } = useStudyLanguage();
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [studyToolResult, setStudyToolResult] = useState<{ tool: string; result: any; language?: StudyLanguageCode } | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -176,47 +177,6 @@ export default function SessionPage() {
   useEffect(() => {
     fetchSession();
   }, [fetchSession]);
-
-  useEffect(() => {
-    let active = true;
-    fetch("/api/user/profile", { credentials: "include" })
-      .then(async (response) => {
-        if (!response.ok) throw new Error("Unable to load language preference");
-        return response.json();
-      })
-      .then(({ user }) => {
-        if (active && isStudyLanguageCode(user?.language)) setExplanationLanguage(user.language);
-      })
-      .catch((error) => console.error("Language preference error:", error));
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const handleLanguageChange = async (nextLanguage: string) => {
-    if (!isStudyLanguageCode(nextLanguage) || nextLanguage === explanationLanguage) return;
-
-    const previousLanguage = explanationLanguage;
-    setExplanationLanguage(nextLanguage);
-    setIsSavingLanguage(true);
-    setSpeechNotice(null);
-
-    try {
-      const response = await fetch("/api/user/profile", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ language: nextLanguage }),
-      });
-      if (!response.ok) throw new Error("Could not save your language preference");
-    } catch (error) {
-      setExplanationLanguage(previousLanguage);
-      alert(error instanceof Error ? error.message : "Could not save your language preference");
-    } finally {
-      setIsSavingLanguage(false);
-    }
-  };
 
   const speakLastMessage = () => {
     const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
@@ -441,20 +401,15 @@ export default function SessionPage() {
                 </div>
               </div>
               <div className="flex flex-wrap items-end gap-2">
-                <div className="space-y-1">
-                  <label htmlFor="explanation-language" className="block text-xs font-medium text-muted-foreground">Explanation language</label>
-                  <select
-                    id="explanation-language"
-                    value={explanationLanguage}
-                    onChange={(event) => void handleLanguageChange(event.target.value)}
-                    disabled={isLoading || isSavingLanguage}
-                    className="min-w-44 rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {STUDY_LANGUAGES.map((language) => (
-                      <option key={language.code} value={language.code}>{language.name} · {language.nativeName}</option>
-                    ))}
-                  </select>
-                </div>
+                <ExplanationLanguagePicker
+                  id="explanation-language"
+                  value={explanationLanguage}
+                  onChange={(nextLanguage) => {
+                    setSpeechNotice(null);
+                    void updateLanguage(nextLanguage);
+                  }}
+                  disabled={isLoading || isLoadingLanguage || isSavingLanguage}
+                />
                 <Button
                   type="button"
                   variant="outline"
@@ -466,6 +421,7 @@ export default function SessionPage() {
                   Re-explain last answer
                 </Button>
               </div>
+              {languageError && <p className="w-full text-xs text-destructive" role="alert">{languageError}</p>}
             </section>
           )}
 

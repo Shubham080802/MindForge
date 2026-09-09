@@ -10,8 +10,18 @@ test("authenticated learner can create and manage a study session", async ({ pag
 
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: process.env.E2E_EMAIL! });
-  await page.goto("/workspace");
+
+  await page.goto("/settings");
+  await expect(page.getByRole("link", { name: "Back to workspace" })).toBeVisible();
+  await expect(page.getByLabel("Explanation language")).toHaveCount(0);
+  await page.getByRole("link", { name: "Back to workspace" }).click();
   await expect(page).toHaveURL(/\/workspace/);
+
+  const workspaceLanguagePicker = page.getByLabel("Explanation language");
+  await expect(workspaceLanguagePicker).toBeVisible();
+  await workspaceLanguagePicker.selectOption("hi");
+  await expect(workspaceLanguagePicker).toHaveValue("hi");
+  await workspaceLanguagePicker.selectOption("en");
 
   await page.getByLabel("Your Question / Topic").fill("Explain this short biology note");
   await page.getByLabel("Attach Files (Optional)").setInputFiles(studySource);

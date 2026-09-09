@@ -8,10 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Upload, FileText, Image, Send, Plus, X, File, Image as ImageIcon, MessageSquare, Loader2 } from "lucide-react";
+import { Upload, FileText, Image, Send, Plus, X, File, Image as ImageIcon, MessageSquare, Loader2, Languages } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDropzone } from "react-dropzone";
 import { NEW_SESSION_EVENT } from "@/lib/browser-events";
+import { ExplanationLanguagePicker } from "@/components/explanation-language-picker";
+import { useStudyLanguage } from "@/hooks/use-study-language";
+import { getStudyLanguage } from "@/lib/study-languages";
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -22,6 +25,7 @@ export default function WorkspacePage() {
   const [newSessionReady, setNewSessionReady] = useState(false);
   const [serviceState, setServiceState] = useState<"checking" | "ready" | "unavailable">("checking");
   const queryInputRef = useRef<HTMLTextAreaElement>(null);
+  const { language, updateLanguage, isLoading: isLoadingLanguage, isSaving: isSavingLanguage, error: languageError } = useStudyLanguage();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -160,6 +164,28 @@ export default function WorkspacePage() {
       <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
           <CardHeader>
+            <div className="flex items-start gap-3">
+              <div className="rounded-lg bg-primary/10 p-2 text-primary"><Languages className="h-5 w-5" aria-hidden="true" /></div>
+              <div>
+                <CardTitle>Choose your professor&apos;s language</CardTitle>
+                <CardDescription className="mt-1">Professor MindForge will explain this session in your selected language.</CardDescription>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <ExplanationLanguagePicker
+              id="workspace-explanation-language"
+              value={language}
+              onChange={(nextLanguage) => void updateLanguage(nextLanguage)}
+              disabled={isProcessing || isLoadingLanguage || isSavingLanguage}
+            />
+            <p className="mt-2 text-xs text-muted-foreground">Current choice: {getStudyLanguage(language).name}. You can change it again inside the session.</p>
+            {languageError && <p className="mt-2 text-xs text-destructive" role="alert">{languageError}</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle>Input Materials</CardTitle>
             <CardDescription>
               Upload documents, images, or type your question directly
@@ -255,7 +281,7 @@ export default function WorkspacePage() {
           type="submit"
           className="w-full"
           size="lg"
-          disabled={serviceState !== "ready" || isProcessing || (!query.trim() && files.length === 0)}
+          disabled={serviceState !== "ready" || isProcessing || isSavingLanguage || (!query.trim() && files.length === 0)}
         >
           {isProcessing ? (
             <>

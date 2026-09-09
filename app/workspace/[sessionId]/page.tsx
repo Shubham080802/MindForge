@@ -21,6 +21,7 @@ import { getStudyLanguage, type StudyLanguageCode } from "@/lib/study-languages"
 import { ExplanationLanguagePicker } from "@/components/explanation-language-picker";
 import { useStudyLanguage } from "@/hooks/use-study-language";
 import { evaluateStudyScope } from "@/lib/study-scope";
+import { shouldSubmitComposer } from "@/lib/chat-composer";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -478,6 +479,16 @@ export default function SessionPage() {
                       setInput(e.target.value);
                       if (chatNotice) setChatNotice(null);
                     }}
+                    onKeyDown={(event) => {
+                      if (!shouldSubmitComposer({
+                        key: event.key,
+                        shiftKey: event.shiftKey,
+                        isComposing: event.nativeEvent.isComposing,
+                      })) return;
+
+                      event.preventDefault();
+                      event.currentTarget.form?.requestSubmit();
+                    }}
                     placeholder={`Ask Professor MindForge in ${getStudyLanguage(explanationLanguage).name}...`}
                     rows={1}
                     className="flex-1 resize-none min-h-[44px] max-h-32"
@@ -487,6 +498,9 @@ export default function SessionPage() {
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
+                <p className="mt-2 text-center text-xs text-muted-foreground">
+                  Press Enter to send · Shift+Enter for a new line
+                </p>
                 <div className="mt-2 flex items-start justify-center gap-2 text-xs text-muted-foreground">
                   <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
                   <span>Study-only mode: ask about learning, assignments, skills, or your materials. Weather, travel planning, bookings, and other utility requests are blocked.</span>

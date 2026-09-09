@@ -22,6 +22,7 @@ import { ExplanationLanguagePicker } from "@/components/explanation-language-pic
 import { useStudyLanguage } from "@/hooks/use-study-language";
 import { evaluateStudyScope } from "@/lib/study-scope";
 import { shouldSubmitComposer } from "@/lib/chat-composer";
+import { loadSpeechVoices, selectSpeechVoice } from "@/lib/speech-voices";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -84,6 +85,12 @@ export default function SessionPage() {
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
   const [exportProgress, setExportProgress] = useState<{ active: boolean; format?: string }>({ active: false });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if ("speechSynthesis" in window) {
+      void loadSpeechVoices(window.speechSynthesis);
+    }
+  }, []);
 
   // Keyboard shortcuts for session page
   useKeyboardShortcuts(
@@ -265,7 +272,7 @@ export default function SessionPage() {
 
   const speechRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-  const speakMessage = (messageId: string, text: string, languageCode: StudyLanguageCode) => {
+  const speakMessage = async (messageId: string, text: string, languageCode: StudyLanguageCode) => {
     const language = getStudyLanguage(languageCode);
     if (!("speechSynthesis" in window)) {
       setSpeechNotice("Read aloud is not supported by this browser.");
@@ -283,13 +290,19 @@ export default function SessionPage() {
 
     const utterance = new SpeechSynthesisUtterance(text.slice(0, 4096));
     utterance.lang = language.speechLocale;
-    const availableVoices = window.speechSynthesis.getVoices();
-    const voice = availableVoices.find((candidate) => candidate.lang.toLowerCase() === language.speechLocale.toLowerCase())
-      || availableVoices.find((candidate) => candidate.lang.toLowerCase().startsWith(language.code.toLowerCase()));
-    if (voice) utterance.voice = voice;
-    setSpeechNotice(availableVoices.length > 0 && !voice
-      ? `${language.name} text is ready, but this device has no dedicated ${language.name} voice. The browser may use its fallback voice.`
-      : null);
+    const availableVoices = await loadSpeechVoices(window.speechSynthesis, {
+      locale: language.speechLocale,
+      languageCode: language.code,
+    });
+    const voice = selectSpeechVoice(availableVoices, language.speechLocale, language.code);
+    if (!voice) {
+      setSpeechNotice(
+        `${language.name} read-aloud needs a ${language.speechLocale} voice. Enable that voice in your browser or device speech settings and try again.`,
+      );
+      return;
+    }
+    utterance.voice = voice;
+    setSpeechNotice(`Reading in ${language.name} with ${voice.name}.`);
     speechRef.current = utterance;
     setSpeakingMessageId(messageId);
 

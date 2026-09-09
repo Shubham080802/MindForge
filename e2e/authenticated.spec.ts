@@ -48,6 +48,12 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await expect(languagePicker).toHaveValue("hi");
   await languagePicker.selectOption("en");
 
+  const chatInput = page.getByPlaceholder(/Ask Professor MindForge/);
+  await chatInput.fill("How is the weather today?");
+  await page.getByRole("button", { name: "Send message" }).click();
+  await expect(page.getByText(/MindForge is a study-only workspace/)).toBeVisible();
+  await expect(page.getByText("How is the weather today?", { exact: true })).toHaveCount(0);
+
   await page.getByRole("button", { name: "New Session" }).click();
   await expect(page).toHaveURL(/\/workspace$/);
   await expect(page.getByRole("heading", { name: "New Study Session" })).toBeVisible();

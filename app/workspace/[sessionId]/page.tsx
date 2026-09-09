@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Eye, FileSearch, GraduationCap } from "lucide-react";
+import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Eye, FileSearch, GraduationCap, ShieldCheck } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { PDFViewerDialog } from "./pdf-viewer-dialog";
@@ -20,6 +20,7 @@ import { readAIStream } from "@/lib/sse-stream";
 import { getStudyLanguage, type StudyLanguageCode } from "@/lib/study-languages";
 import { ExplanationLanguagePicker } from "@/components/explanation-language-picker";
 import { useStudyLanguage } from "@/hooks/use-study-language";
+import { evaluateStudyScope } from "@/lib/study-scope";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -73,6 +74,7 @@ export default function SessionPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
   const [speechNotice, setSpeechNotice] = useState<string | null>(null);
+  const [chatNotice, setChatNotice] = useState<string | null>(null);
   const { language: explanationLanguage, updateLanguage, isLoading: isLoadingLanguage, isSaving: isSavingLanguage, error: languageError } = useStudyLanguage();
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [studyToolResult, setStudyToolResult] = useState<{ tool: string; result: any; language?: StudyLanguageCode } | null>(null);
@@ -188,6 +190,13 @@ export default function SessionPage() {
   const submitMessage = async (rawContent: string, clearComposer = false) => {
     const content = rawContent.trim();
     if (!content || isLoading) return;
+    const scope = evaluateStudyScope(content);
+    if (!scope.allowed) {
+      setChatNotice(scope.message);
+      textareaRef.current?.focus();
+      return;
+    }
+    setChatNotice(null);
     const responseLanguage = explanationLanguage;
 
     const userMessage: Message = {
@@ -209,7 +218,10 @@ export default function SessionPage() {
         body: JSON.stringify({ content, stream: true, language: responseLanguage }),
       });
 
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({ message: "Failed to send message" }));
+        throw new Error(errorData.message || "Failed to send message");
+      }
 
       if (!res.body) throw new Error("The AI response stream was unavailable");
 
@@ -238,8 +250,8 @@ export default function SessionPage() {
       }
     } catch (error) {
       console.error("Send message error:", error);
-      setMessages((prev) => prev.filter((message) => message.id !== assistantMessageId));
-      alert(error instanceof Error ? error.message : "Failed to send message");
+      setMessages((prev) => prev.filter((message) => message.id !== assistantMessageId && message.id !== userMessage.id));
+      setChatNotice(error instanceof Error ? error.message : "Failed to send message");
     } finally {
       setIsLoading(false);
     }
@@ -462,7 +474,10 @@ export default function SessionPage() {
                   <Textarea
                     ref={textareaRef}
                     value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                    onChange={(e) => {
+                      setInput(e.target.value);
+                      if (chatNotice) setChatNotice(null);
+                    }}
                     placeholder={`Ask Professor MindForge in ${getStudyLanguage(explanationLanguage).name}...`}
                     rows={1}
                     className="flex-1 resize-none min-h-[44px] max-h-32"
@@ -472,6 +487,11 @@ export default function SessionPage() {
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
+                <div className="mt-2 flex items-start justify-center gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                  <span>Study-only mode: ask about learning, assignments, skills, or your materials. Weather, travel planning, bookings, and other utility requests are blocked.</span>
+                </div>
+                {chatNotice && <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-center text-sm text-amber-900 dark:text-amber-100" role="alert">{chatNotice}</p>}
                 <p className="text-xs text-muted-foreground mt-2 text-center">
                   Answers use {getStudyLanguage(explanationLanguage).name} · Read-aloud voice availability depends on your browser and device
                 </p>
@@ -655,9 +675,23 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
     <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "")}>
       {!isUser && <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center flex-shrink-0" aria-hidden="true"><GraduationCap className="h-4 w-4 text-primary-foreground" /></div>}
       <div className={cn("max-w-[85%] sm:max-w-[75%] flex flex-col gap-1", isUser ? "items-end" : "items-start")}>
-        <div className="flex items-center gap-2 px-1 text-xs font-medium text-muted-foreground">
-          <span>{isUser ? "Student" : "Professor MindForge"}</span>
-          {!isUser && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">{language.name}</span>}
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 px-1 text-xs font-medium text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <span>{isUser ? "Student" : "Professor MindForge"}</span>
+            {!isUser && <span className="rounded-full bg-primary/10 px-2 py-0.5 text-primary">{language.name}</span>}
+          </div>
+          {!isUser && (
+            <Button
+              variant={speakingId === message.id ? "default" : "outline"}
+              size="sm"
+              className="h-10 px-4 text-sm font-semibold shadow-sm"
+              aria-label={speakingId === message.id ? "Stop reading response" : `Read ${language.name} response aloud`}
+              onClick={() => onSpeak(message.id, message.content, language.code)}
+            >
+              {speakingId === message.id ? <VolumeX className="mr-2 h-5 w-5" /> : <Volume2 className="mr-2 h-5 w-5" />}
+              {speakingId === message.id ? "Stop reading" : "Read aloud"}
+            </Button>
+          )}
         </div>
         <div
           className={cn(
@@ -671,17 +705,6 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
           <span>{formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}</span>
-          {!isUser && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6 p-0"
-              aria-label={speakingId === message.id ? "Stop reading response" : `Read ${language.name} response aloud`}
-              onClick={() => onSpeak(message.id, message.content, language.code)}
-            >
-              {speakingId === message.id ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-            </Button>
-          )}
           {!isUser && (
             <Button
               variant="ghost"

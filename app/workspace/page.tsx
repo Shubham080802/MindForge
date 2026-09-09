@@ -8,13 +8,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Upload, FileText, Image, Send, Plus, X, File, Image as ImageIcon, MessageSquare, Loader2, Languages } from "lucide-react";
+import { Upload, FileText, Image, Send, Plus, X, File, Image as ImageIcon, MessageSquare, Loader2, Languages, ShieldCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDropzone } from "react-dropzone";
 import { NEW_SESSION_EVENT } from "@/lib/browser-events";
 import { ExplanationLanguagePicker } from "@/components/explanation-language-picker";
 import { useStudyLanguage } from "@/hooks/use-study-language";
 import { getStudyLanguage } from "@/lib/study-languages";
+import { evaluateStudyScope } from "@/lib/study-scope";
 
 export default function WorkspacePage() {
   const router = useRouter();
@@ -24,6 +25,7 @@ export default function WorkspacePage() {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [newSessionReady, setNewSessionReady] = useState(false);
   const [serviceState, setServiceState] = useState<"checking" | "ready" | "unavailable">("checking");
+  const [scopeNotice, setScopeNotice] = useState<string | null>(null);
   const queryInputRef = useRef<HTMLTextAreaElement>(null);
   const { language, updateLanguage, isLoading: isLoadingLanguage, isSaving: isSavingLanguage, error: languageError } = useStudyLanguage();
 
@@ -100,6 +102,13 @@ export default function WorkspacePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() && files.length === 0) return;
+    const scope = evaluateStudyScope(query);
+    if (!scope.allowed) {
+      setScopeNotice(scope.message);
+      queryInputRef.current?.focus();
+      return;
+    }
+    setScopeNotice(null);
     setIsProcessing(true);
 
     try {
@@ -116,7 +125,8 @@ export default function WorkspacePage() {
       });
 
       if (!sessionRes.ok) {
-        throw new Error("Failed to create session");
+        const errorData = await sessionRes.json().catch(() => ({ message: "Failed to create session" }));
+        throw new Error(errorData.message || "Failed to create session");
       }
 
       const { session } = await sessionRes.json();
@@ -200,11 +210,19 @@ export default function WorkspacePage() {
                   id="query"
                   placeholder="What would you like to learn about? Describe the topic, ask a question, or paste text..."
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    if (scopeNotice) setScopeNotice(null);
+                  }}
                   rows={4}
                   className="resize-none"
                   disabled={isProcessing}
                 />
+                <div className="mt-2 flex items-start gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" aria-hidden="true" />
+                  <span>Study-only mode accepts learning questions, concepts, assignments, research, and your uploaded materials. Utility requests such as live weather or trip planning are blocked.</span>
+                </div>
+                {scopeNotice && <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-100" role="alert">{scopeNotice}</p>}
               </div>
             </div>
 

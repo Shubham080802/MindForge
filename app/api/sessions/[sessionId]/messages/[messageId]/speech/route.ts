@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAIConfig } from "@/lib/ai-client";
-import { DEFAULT_SPEECH_MODEL, SPEECH_DECODE_SCHEME, generateGeminiSpeech } from "@/lib/gemini-speech";
+import { generateGeminiSpeech } from "@/lib/gemini-speech";
+import { generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
+import { resolveSpeechProvider, speechCacheScheme, speechContentType } from "@/lib/speech-provider";
 import { getOrCreateSpeechAudio, type SpeechAudioStore } from "@/lib/speech-cache";
 import { SPEECH_CHUNK_SCHEME, prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
 import { getStudyLanguage, isStudyLanguageCode } from "@/lib/study-languages";
@@ -51,7 +53,12 @@ async function createSpeechResponse(
 
   // The scheme is part of the key so audio cached under previous chunk
   // boundaries can never be served against a new chunk index.
-  const cacheKey = { messageId, chunkIndex, model: `${DEFAULT_SPEECH_MODEL}:${SPEECH_CHUNK_SCHEME}:${SPEECH_DECODE_SCHEME}` };
+  const provider = resolveSpeechProvider();
+  const cacheKey = {
+    messageId,
+    chunkIndex,
+    model: `${SPEECH_CHUNK_SCHEME}:${speechCacheScheme(provider)}`,
+  };
   const store: SpeechAudioStore = {
     read: async (key) => {
       const cached = await prisma.speechAudio.findUnique({
@@ -71,6 +78,16 @@ async function createSpeechResponse(
   };
   const result = await getOrCreateSpeechAudio(store, cacheKey, async () => {
     await enforceRateLimit(request, "ai", userId);
+    if (provider === "elevenlabs") {
+      return generateElevenLabsSpeech({
+        text,
+        languageCode: language.code,
+        // Neighbouring chunks keep the joins between generations from sounding clipped.
+        previousText: chunks[chunkIndex - 1],
+        nextText: chunks[chunkIndex + 1],
+        config: getElevenLabsConfig(),
+      });
+    }
     return generateGeminiSpeech({
       text,
       locale: language.speechLocale,
@@ -79,7 +96,7 @@ async function createSpeechResponse(
   });
   const audio = new Uint8Array(result.audio);
   const headers: Record<string, string> = {
-    "Content-Type": "audio/wav",
+    "Content-Type": speechContentType(provider),
     // Without this the browser's media loader stalls at readyState 0.
     "Accept-Ranges": "bytes",
     "Cache-Control": "private, max-age=86400",
@@ -88,6 +105,7 @@ async function createSpeechResponse(
     "X-Speech-Chunk-Count": String(chunks.length),
     "X-Speech-Language": language.code,
     "X-Speech-Cache": result.cacheStatus,
+    "X-Speech-Provider": provider,
   };
 
   const range = resolveByteRange(request.headers.get("range"), audio.byteLength);

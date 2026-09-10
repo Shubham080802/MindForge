@@ -8,7 +8,9 @@ Clerk, Prisma, PostgreSQL, Google Gemini, and Upstash Redis.
 - Clerk-managed verified accounts and configurable social sign-in
 - Private PDF, DOCX, text, Markdown, and image/OCR material ingestion
 - Account-scoped sessions, professor–student tutoring, search, source downloads, and deletion
-- Student-controlled multilingual explanations and matching browser speech voices
+- Student-controlled multilingual explanations with ElevenLabs professor audio
+  (configurable voice and modulation), falling back to Gemini speech when no
+  ElevenLabs key is set
 - Summaries, concepts, flashcards, quizzes, study plans, and translation
 - JSON, Markdown, and PDF exports. PDF uses a Latin font: scientific symbols
   are transliterated, and a session written in a non-Latin script is refused

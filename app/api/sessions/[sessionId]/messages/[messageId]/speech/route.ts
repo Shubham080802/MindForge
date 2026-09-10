@@ -8,6 +8,7 @@ import { getStudyLanguage, isStudyLanguageCode } from "@/lib/study-languages";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { speechChunkInput } from "@/lib/validation";
+import { contentRangeHeader, resolveByteRange, unsatisfiableRangeHeader } from "@/lib/http-range";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -76,20 +77,43 @@ async function createSpeechResponse(
       apiKey: getAIConfig().apiKey,
     });
   });
-  const audio = result.audio;
+  const audio = new Uint8Array(result.audio);
+  const headers: Record<string, string> = {
+    "Content-Type": "audio/wav",
+    // Without this the browser's media loader stalls at readyState 0.
+    "Accept-Ranges": "bytes",
+    "Cache-Control": "private, max-age=86400",
+    "Content-Disposition": "inline",
+    "X-Content-Type-Options": "nosniff",
+    "X-Speech-Chunk-Count": String(chunks.length),
+    "X-Speech-Language": language.code,
+    "X-Speech-Cache": result.cacheStatus,
+  };
 
-  return new Response(new Uint8Array(audio), {
+  const range = resolveByteRange(request.headers.get("range"), audio.byteLength);
+
+  if (range.type === "unsatisfiable") {
+    return new Response(null, {
+      status: 416,
+      headers: { ...headers, "Content-Range": unsatisfiableRangeHeader(audio.byteLength) },
+    });
+  }
+
+  if (range.type === "partial") {
+    const slice = audio.subarray(range.start, range.end + 1);
+    return new Response(slice, {
+      status: 206,
+      headers: {
+        ...headers,
+        "Content-Range": contentRangeHeader(range.start, range.end, audio.byteLength),
+        "Content-Length": String(slice.byteLength),
+      },
+    });
+  }
+
+  return new Response(audio, {
     status: 200,
-    headers: {
-      "Content-Type": "audio/wav",
-      "Content-Length": String(audio.byteLength),
-      "Cache-Control": "private, max-age=86400",
-      "Content-Disposition": "inline",
-      "X-Content-Type-Options": "nosniff",
-      "X-Speech-Chunk-Count": String(chunks.length),
-      "X-Speech-Language": language.code,
-      "X-Speech-Cache": result.cacheStatus,
-    },
+    headers: { ...headers, "Content-Length": String(audio.byteLength) },
   });
 }
 

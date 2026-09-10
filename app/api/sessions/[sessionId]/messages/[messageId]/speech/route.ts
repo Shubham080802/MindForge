@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAIConfig } from "@/lib/ai-client";
 import { generateGeminiSpeech } from "@/lib/gemini-speech";
-import { SpeechProviderError, chunkContextEnabled, generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
+import { ALWAYS_AVAILABLE_VOICE, SpeechProviderError, chunkContextEnabled, generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
 import { resolveSpeechProvider, speechCacheScheme, speechContentType, type SpeechProviderName } from "@/lib/speech-provider";
 import { getOrCreateSpeechAudio, type SpeechAudioStore } from "@/lib/speech-cache";
 import { SPEECH_CHUNK_SCHEME, prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
@@ -64,10 +64,10 @@ async function createSpeechResponse(
   // The scheme is part of the key so audio cached under previous chunk
   // boundaries, or a different provider or voice, can never be served against
   // a new chunk index.
-  const keyFor = (name: SpeechProviderName) => ({
+  const keyFor = (name: SpeechProviderName, voiceOverride?: string) => ({
     messageId,
     chunkIndex,
-    model: `${SPEECH_CHUNK_SCHEME}:${speechCacheScheme(name, language.code)}`,
+    model: `${SPEECH_CHUNK_SCHEME}:${speechCacheScheme(name, language.code, process.env, voiceOverride)}`,
   });
   const store: SpeechAudioStore = {
     read: async (key) => {
@@ -96,22 +96,51 @@ async function createSpeechResponse(
   });
 
   let provider = resolveSpeechProvider();
+  let usedVoice: string | undefined;
   let result;
 
   if (provider === "elevenlabs") {
-    try {
-      result = await getOrCreateSpeechAudio(store, keyFor("elevenlabs"), async () => {
-        await enforceRateLimit(request, "ai", userId);
-        return generateElevenLabsSpeech({
-          text,
-          languageCode: language.code,
-          // Neighbouring chunks keep the joins from sounding clipped, at a
-          // billing cost ElevenLabs does not document. Opt in deliberately.
-          previousText: chunkContextEnabled() ? chunks[chunkIndex - 1] : undefined,
-          nextText: chunkContextEnabled() ? chunks[chunkIndex + 1] : undefined,
-          config: getElevenLabsConfig(process.env, language.code),
-        });
+    const speak = (voiceId?: string) => {
+      const config = getElevenLabsConfig(process.env, language.code);
+      return generateElevenLabsSpeech({
+        text,
+        languageCode: language.code,
+        // Neighbouring chunks keep the joins from sounding clipped, at a
+        // billing cost ElevenLabs does not document. Opt in deliberately.
+        previousText: chunkContextEnabled() ? chunks[chunkIndex - 1] : undefined,
+        nextText: chunkContextEnabled() ? chunks[chunkIndex + 1] : undefined,
+        config: voiceId ? { ...config, voiceId } : config,
       });
+    };
+
+    try {
+      try {
+        result = await getOrCreateSpeechAudio(store, keyFor("elevenlabs"), async () => {
+          await enforceRateLimit(request, "ai", userId);
+          return speak();
+        });
+      } catch (error) {
+        // A Voice Library voice the plan does not include is reported as 402,
+        // indistinguishable from being out of credits. One retry with a premade
+        // voice tells the two apart, and keeps the better provider. It is cached
+        // under the voice actually used, so an upgraded plan is not served the
+        // substitute for ever.
+        const restrictedVoice = error instanceof SpeechProviderError
+          && error.providerStatus === 402
+          && getElevenLabsConfig(process.env, language.code).voiceId !== ALWAYS_AVAILABLE_VOICE;
+        if (!restrictedVoice) throw error;
+
+        await reportServerError("Speech voice unavailable on plan", error, {
+          language: language.code,
+          fallbackVoice: ALWAYS_AVAILABLE_VOICE,
+        });
+        usedVoice = ALWAYS_AVAILABLE_VOICE;
+        result = await getOrCreateSpeechAudio(
+          store,
+          keyFor("elevenlabs", ALWAYS_AVAILABLE_VOICE),
+          () => speak(ALWAYS_AVAILABLE_VOICE),
+        );
+      }
     } catch (error) {
       // Out of credits is not a reason for the professor to fall silent. Gemini
       // is less lifelike but free, so read-aloud degrades instead of breaking.
@@ -139,6 +168,7 @@ async function createSpeechResponse(
     "X-Speech-Language": language.code,
     "X-Speech-Cache": result.cacheStatus,
     "X-Speech-Provider": provider,
+    ...(usedVoice ? { "X-Speech-Voice-Fallback": usedVoice } : {}),
   };
 
   const range = resolveByteRange(request.headers.get("range"), audio.byteLength);

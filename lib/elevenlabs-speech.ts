@@ -213,12 +213,24 @@ export class SpeechProviderError extends Error {
   }
 }
 
+/**
+ * A premade voice, included on every plan. Voice Library voices are shared by
+ * other creators and some are restricted to paid plans, which ElevenLabs
+ * reports as 402 rather than as anything voice-shaped. Retrying once with a
+ * voice that is always available separates "this voice is not included" from
+ * "this account cannot generate at all".
+ */
+export const ALWAYS_AVAILABLE_VOICE = DEFAULT_ELEVENLABS_VOICE;
+
 export function elevenLabsFailure(status: number, body: string): SpeechProviderError {
   if (status === 401) {
     return new SpeechProviderError("The ElevenLabs API key was rejected. Check it in the deployment settings.", status);
   }
   if (status === 402) {
-    return new SpeechProviderError("The ElevenLabs plan will not cover this request: credits are used up, or API access needs a paid plan.", status);
+    return new SpeechProviderError(
+      "ElevenLabs will not bill this request. Either the chosen voice needs a paid plan, or credits are used up.",
+      status,
+    );
   }
   if (status === 429) {
     return new SpeechProviderError("ElevenLabs credits are exhausted or the rate limit was hit. Read-aloud will work again once quota is available.", status);

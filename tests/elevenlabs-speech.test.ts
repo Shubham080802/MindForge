@@ -8,6 +8,7 @@ import {
   elevenLabsFailure,
   generateElevenLabsSpeech,
   getElevenLabsConfig,
+  ALWAYS_AVAILABLE_VOICE,
   parseVoiceMap,
   resolveVoiceForLanguage,
   resolveVoiceModulation,
@@ -238,6 +239,14 @@ describe("per-language voices", () => {
   });
 
   // Two languages sharing a message id must not share cached audio.
+  it("keys audio by the voice actually used, so a substitute is not served for ever", () => {
+    const intended = speechCacheScheme("elevenlabs", "hi", KEY);
+    const substitute = speechCacheScheme("elevenlabs", "hi", KEY, ALWAYS_AVAILABLE_VOICE);
+
+    expect(substitute).not.toBe(intended);
+    expect(substitute).toContain(ALWAYS_AVAILABLE_VOICE);
+  });
+
   it("keeps a separate cache identity per language", () => {
     expect(speechCacheScheme("elevenlabs", "hi", MAP)).not.toBe(speechCacheScheme("elevenlabs", "zh", MAP));
   });

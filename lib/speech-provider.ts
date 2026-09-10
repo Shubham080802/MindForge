@@ -35,11 +35,15 @@ export function speechCacheScheme(
   provider: SpeechProviderName,
   language: StudyLanguageCode = "en",
   env: SpeechEnvironment = process.env,
+  /** The voice actually used, when it differs from the configured one. */
+  voiceOverride?: string,
 ): string {
   if (provider === "gemini") return `${DEFAULT_SPEECH_MODEL}:${SPEECH_DECODE_SCHEME}`;
 
   // The voice varies by language, so it has to be part of the key.
-  const { voiceId, model, modulation } = getElevenLabsConfig(env, language);
+  const config = getElevenLabsConfig(env, language);
+  const { model, modulation } = config;
+  const voiceId = voiceOverride ?? config.voiceId;
   const shape = [
     modulation.stability,
     modulation.similarityBoost,

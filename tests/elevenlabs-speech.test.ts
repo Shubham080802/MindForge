@@ -4,6 +4,7 @@ import {
   DEFAULT_ELEVENLABS_VOICE,
   DEFAULT_VOICE_MODULATION,
   buildElevenLabsRequest,
+  chunkContextEnabled,
   elevenLabsFailure,
   generateElevenLabsSpeech,
   getElevenLabsConfig,
@@ -65,6 +66,16 @@ describe("getElevenLabsConfig", () => {
     expect(config.voiceId).toBe(DEFAULT_ELEVENLABS_VOICE);
     expect(config.model).toBe(DEFAULT_ELEVENLABS_MODEL);
     expect(config.outputFormat).toBe("mp3_44100_128");
+  });
+
+  // Half the price per character, which doubles a small credit allowance.
+  it("defaults to the cheaper, faster Flash model", () => {
+    expect(DEFAULT_ELEVENLABS_MODEL).toBe("eleven_flash_v2_5");
+  });
+
+  it("allows trading quota for multilingual v2", () => {
+    expect(getElevenLabsConfig({ ...KEY, ELEVENLABS_MODEL: "eleven_multilingual_v2" }).model)
+      .toBe("eleven_multilingual_v2");
   });
 });
 
@@ -147,6 +158,16 @@ describe("generateElevenLabsSpeech", () => {
     expect(elevenLabsFailure(401, "").message).toMatch(/API key/);
     expect(elevenLabsFailure(429, "").message).toMatch(/quota or rate limit/);
     expect(elevenLabsFailure(500, "").message).toMatch(/failed \(500\)/);
+  });
+});
+
+describe("chunkContextEnabled", () => {
+  it("is off by default, so unmeasured context cannot quietly cost credits", () => {
+    expect(chunkContextEnabled({})).toBe(false);
+  });
+
+  it("can be opted into", () => {
+    expect(chunkContextEnabled({ ELEVENLABS_CHUNK_CONTEXT: "true" })).toBe(true);
   });
 });
 

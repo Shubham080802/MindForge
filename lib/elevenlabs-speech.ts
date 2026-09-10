@@ -2,8 +2,15 @@ import type { StudyLanguageCode } from "@/lib/study-languages";
 
 export const ELEVENLABS_SPEECH_ENDPOINT = "https://api.elevenlabs.io/v1/text-to-speech";
 
-/** Most lifelike of the multilingual models, and the reason for moving here. */
-export const DEFAULT_ELEVENLABS_MODEL = "eleven_multilingual_v2";
+/**
+ * Flash rather than Multilingual v2: half the price per character ($0.05 vs
+ * $0.10 per 1K) and ~75ms instead of seconds, across a superset of the same
+ * languages. On a 10,000-credit allowance that is the difference between about
+ * eight professor replies and about fifteen. Set ELEVENLABS_MODEL to
+ * "eleven_multilingual_v2" to trade half the quota for its longer-form
+ * stability.
+ */
+export const DEFAULT_ELEVENLABS_MODEL = "eleven_flash_v2_5";
 /** "George" from the shared voice library: a warm, unhurried narrator. */
 export const DEFAULT_ELEVENLABS_VOICE = "JBFqnCBsd6RMkjVDRZzb";
 /** MP3 instead of raw PCM: roughly a twentieth of the bytes, and no byte order to get wrong. */
@@ -96,6 +103,16 @@ export interface ElevenLabsSpeechRequest {
   /** Neighbouring chunks, so joins between them do not sound clipped. */
   previousText?: string;
   nextText?: string;
+}
+
+/**
+ * ElevenLabs recommends previous_text/next_text to keep prosody natural across
+ * split text, but does not document whether that context is billed. On a small
+ * credit allowance a silent tripling of cost is the worse risk, so this stays
+ * off until someone opts in and watches their usage.
+ */
+export function chunkContextEnabled(env: SpeechEnvironment = process.env): boolean {
+  return env.ELEVENLABS_CHUNK_CONTEXT === "true";
 }
 
 export function buildElevenLabsRequest({

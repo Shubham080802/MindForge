@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAIConfig } from "@/lib/ai-client";
 import { generateGeminiSpeech } from "@/lib/gemini-speech";
-import { generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
+import { chunkContextEnabled, generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
 import { resolveSpeechProvider, speechCacheScheme, speechContentType } from "@/lib/speech-provider";
 import { getOrCreateSpeechAudio, type SpeechAudioStore } from "@/lib/speech-cache";
 import { SPEECH_CHUNK_SCHEME, prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
@@ -82,9 +82,10 @@ async function createSpeechResponse(
       return generateElevenLabsSpeech({
         text,
         languageCode: language.code,
-        // Neighbouring chunks keep the joins between generations from sounding clipped.
-        previousText: chunks[chunkIndex - 1],
-        nextText: chunks[chunkIndex + 1],
+        // Neighbouring chunks keep the joins from sounding clipped, at a
+        // billing cost ElevenLabs does not document. Opt in deliberately.
+        previousText: chunkContextEnabled() ? chunks[chunkIndex - 1] : undefined,
+        nextText: chunkContextEnabled() ? chunks[chunkIndex + 1] : undefined,
         config: getElevenLabsConfig(),
       });
     }

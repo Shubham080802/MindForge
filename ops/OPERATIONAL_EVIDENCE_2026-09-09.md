@@ -55,6 +55,8 @@ path or the custom ownership model should be retired.
 
 ## Human alert delivery
 
+### First attempt — webhook transport, destination empty
+
 - Production deployment: `dpl_8eT6itj5WCdQgABs5JF3csmAV9Ck`
 - Canonical URL health: HTTP 200; database and configuration both `ok`
 - Alert-test authentication: unauthenticated POST returned HTTP 401
@@ -62,31 +64,50 @@ path or the custom ownership model should be retired.
 - Structured production event: present in Vercel runtime logs with
   `action=operations.alert_test` and `test=true`
 - Webhook transport result: HTTP 503, `not-configured`
-- Human receipt: **not proven**
+- Human receipt: not proven at this point
 
-At the time of this drill, the Vercel environment inventory contained a
-generic monitoring-webhook variable name, but its URL resolved as empty in the
-running function. The transport was subsequently rebuilt on Resend
-(`RESEND_API_KEY` / `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO`) after the owner
-chose an email destination in place of a webhook; the `not-configured` result
-above reflects the prior webhook-based implementation, not the current one.
-The protected test endpoint correctly exposes an unconfigured destination
-without returning the API key, token, or remote response body. It must be
-rerun after `RESEND_API_KEY` and `ALERT_EMAIL_TO` are set, and the on-call
-human must confirm the same correlation ID in the delivered email. Vercel's
-configurable anomaly alerts require Pro with Observability Plus; see
+The Vercel environment inventory contained a generic monitoring-webhook
+variable name, but its URL resolved as empty in the running function. The
+protected test endpoint correctly exposed that condition without returning a
+URL, token, or remote response body.
+
+### Resolution — Resend email transport, human receipt confirmed
+
+The owner has no Slack workspace and chose email delivery, so the generic
+webhook forward was replaced with a Resend transport
+(`RESEND_API_KEY` / `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO`) in commit
+`96248a5`. A generic webhook POST would not have satisfied Resend's API
+contract, so `deliverMonitoringEvent` now posts a composed message to
+`https://api.resend.com/emails`.
+
+- Production deployment: `mind-forge-fs0qrolwt-test11-ecf6.vercel.app`
+- Canonical URL health: HTTP 200; database and configuration both `ok`
+- Authenticated correlation ID: `a867a412-2f41-44fc-9de6-4a9075f72b16`
+- Email transport result: `delivered`, HTTP 200, 142 ms
+- Human receipt: **confirmed by the owner** for the correlation ID above, in
+  the `ALERT_EMAIL_TO` inbox, subject `MindForge alert: operations.alert_test`
+
+`CRON_SECRET` was rotated during this drill. Its previous value was
+unrecoverable: it is stored as a Vercel Secret-type variable, which cannot be
+revealed through the dashboard or read back through the CLI once saved. The
+rotation is transparent to the scheduled retention job, because Vercel Cron
+reads the current environment value at invocation time. No secret values are
+recorded here.
+
+Resend is operating without a verified sending domain, so `ALERT_EMAIL_FROM`
+remains `onboarding@resend.dev`. In that mode Resend only delivers to the
+account's own registered address; a second recipient cannot be added, and
+on-call rotation is not yet possible. Vercel's configurable anomaly alerts
+require Pro with Observability Plus; see
 [Vercel Alerts](https://vercel.com/docs/alerts).
 
 ## Exit criteria
 
-1. Create a Resend API key and set `RESEND_API_KEY` and `ALERT_EMAIL_TO` (and
-   `ALERT_EMAIL_FROM` once a sending domain is verified) in Vercel Production.
-   Without a verified domain, `ALERT_EMAIL_FROM` must stay on
-   `onboarding@resend.dev`, which Resend only delivers to the account's own
-   registered email address.
-2. Redeploy, invoke `POST /api/internal/alert-test` with `CRON_SECRET`, record a
-   2xx delivery receipt, and have the on-call owner confirm the correlation ID
-   in the received email.
+1. **Met.** Human alert delivery is proven end to end: a protected production
+   drill produced a 2xx Resend receipt and the owner confirmed the matching
+   correlation ID in the destination inbox.
+2. Verify a sending domain in Resend and move `ALERT_EMAIL_FROM` off
+   `onboarding@resend.dev` before more than one person needs to receive alerts.
 3. Before public launch, either upgrade Supabase and restore a managed backup to
    a new project, or automate encrypted off-site logical backups with retention
    and rerun this drill from one of those retained artifacts.

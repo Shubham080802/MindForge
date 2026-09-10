@@ -64,20 +64,29 @@ path or the custom ownership model should be retired.
 - Webhook transport result: HTTP 503, `not-configured`
 - Human receipt: **not proven**
 
-The Vercel environment inventory contains monitoring variable names, but the
-webhook URL resolves as empty in the running function. The new protected test
-endpoint correctly exposes that condition without returning a URL, token, or
-remote response body. It must be rerun after a real monitored destination is
-chosen, and the on-call human must confirm the same correlation ID in that
-destination. Vercel's configurable anomaly alerts require Pro with
-Observability Plus; see [Vercel Alerts](https://vercel.com/docs/alerts).
+At the time of this drill, the Vercel environment inventory contained a
+generic monitoring-webhook variable name, but its URL resolved as empty in the
+running function. The transport was subsequently rebuilt on Resend
+(`RESEND_API_KEY` / `ALERT_EMAIL_FROM` / `ALERT_EMAIL_TO`) after the owner
+chose an email destination in place of a webhook; the `not-configured` result
+above reflects the prior webhook-based implementation, not the current one.
+The protected test endpoint correctly exposes an unconfigured destination
+without returning the API key, token, or remote response body. It must be
+rerun after `RESEND_API_KEY` and `ALERT_EMAIL_TO` are set, and the on-call
+human must confirm the same correlation ID in the delivered email. Vercel's
+configurable anomaly alerts require Pro with Observability Plus; see
+[Vercel Alerts](https://vercel.com/docs/alerts).
 
 ## Exit criteria
 
-1. Choose a human-facing webhook destination and install its non-empty URL and
-   optional bearer token in Vercel Production.
+1. Create a Resend API key and set `RESEND_API_KEY` and `ALERT_EMAIL_TO` (and
+   `ALERT_EMAIL_FROM` once a sending domain is verified) in Vercel Production.
+   Without a verified domain, `ALERT_EMAIL_FROM` must stay on
+   `onboarding@resend.dev`, which Resend only delivers to the account's own
+   registered email address.
 2. Redeploy, invoke `POST /api/internal/alert-test` with `CRON_SECRET`, record a
-   2xx delivery receipt, and have the on-call owner confirm the correlation ID.
+   2xx delivery receipt, and have the on-call owner confirm the correlation ID
+   in the received email.
 3. Before public launch, either upgrade Supabase and restore a managed backup to
    a new project, or automate encrypted off-site logical backups with retention
    and rerun this drill from one of those retained artifacts.

@@ -32,10 +32,12 @@ The production Vercel deployment registers the daily `GET /api/internal/retentio
 
 ## Alert delivery drill
 
-After configuring the monitoring webhook, send a clearly labeled synthetic
-event through the production application. The endpoint is protected by the same
-`CRON_SECRET` used for scheduled maintenance and never returns the webhook URL,
-token, or response body:
+After configuring `RESEND_API_KEY` and `ALERT_EMAIL_TO` (and optionally
+`ALERT_EMAIL_FROM` once a sending domain is verified in Resend), send a
+clearly labeled synthetic event through the production application. The
+endpoint is protected by the same `CRON_SECRET` used for scheduled
+maintenance and never returns the Resend API key, response body, or the
+destination address:
 
 ```bash
 curl --fail-with-body --request POST \
@@ -44,9 +46,10 @@ curl --fail-with-body --request POST \
 ```
 
 Record the returned correlation ID, HTTP acceptance status, and delivery
-latency. Then have the on-call owner confirm that the labeled
-`operations.alert_test` event is visible in the human-facing destination.
-Endpoint acceptance proves transport only; it is not human-delivery proof.
+latency. Then have the on-call owner confirm that an email with subject
+`MindForge alert: operations.alert_test` and the matching correlation ID
+arrived at the alert inbox. Endpoint acceptance proves transport only; it is
+not human-delivery proof.
 
 ## Authentication rollback
 

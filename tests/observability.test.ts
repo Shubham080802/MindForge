@@ -3,8 +3,9 @@ import { deliverMonitoringEvent, errorEvent } from "@/lib/observability";
 
 afterEach(() => {
   vi.unstubAllGlobals();
-  delete process.env.ERROR_MONITORING_WEBHOOK_URL;
-  delete process.env.ERROR_MONITORING_WEBHOOK_TOKEN;
+  delete process.env.RESEND_API_KEY;
+  delete process.env.ALERT_EMAIL_FROM;
+  delete process.env.ALERT_EMAIL_TO;
 });
 
 describe("server error events", () => {
@@ -21,8 +22,8 @@ describe("server error events", () => {
   });
 
   it("reports a monitoring endpoint acceptance receipt", async () => {
-    process.env.ERROR_MONITORING_WEBHOOK_URL = "https://monitoring.example.test/events";
-    process.env.ERROR_MONITORING_WEBHOOK_TOKEN = "test-token";
+    process.env.RESEND_API_KEY = "test-key";
+    process.env.ALERT_EMAIL_TO = "owner@example.test";
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -34,16 +35,21 @@ describe("server error events", () => {
 
     expect(receipt).toMatchObject({ status: "delivered", httpStatus: 202 });
     expect(fetchMock).toHaveBeenCalledOnce();
-    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
-    expect(request?.headers).toMatchObject({ Authorization: "Bearer test-token" });
-    expect(JSON.parse(String(request?.body))).toMatchObject({
-      action: "operations.alert_test",
-      context: { correlationId: "test-correlation", test: true },
+    const [requestUrl, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(requestUrl).toBe("https://api.resend.com/emails");
+    expect(request.headers).toMatchObject({ Authorization: "Bearer test-key" });
+
+    const body = JSON.parse(String(request.body));
+    expect(body).toMatchObject({
+      to: ["owner@example.test"],
+      subject: "MindForge alert: operations.alert_test",
     });
+    expect(body.text).toContain("test-correlation");
   });
 
   it("fails delivery when the monitoring endpoint rejects an event", async () => {
-    process.env.ERROR_MONITORING_WEBHOOK_URL = "https://monitoring.example.test/events";
+    process.env.RESEND_API_KEY = "test-key";
+    process.env.ALERT_EMAIL_TO = "owner@example.test";
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 500 })));
 
     await expect(deliverMonitoringEvent(errorEvent("upload.failed", new Error("boom"))))

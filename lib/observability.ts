@@ -20,24 +20,43 @@ export function errorEvent(action: string, error: unknown, context: ErrorContext
   };
 }
 
+function emailBody(event: ReturnType<typeof errorEvent>) {
+  const contextLines = Object.entries(event.context)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join("\n");
+
+  return [
+    `Action: ${event.action}`,
+    `Time: ${event.timestamp}`,
+    `Error: ${event.error.name}: ${event.error.message}`,
+    contextLines ? `Context:\n${contextLines}` : null,
+  ].filter(Boolean).join("\n\n");
+}
+
 export async function deliverMonitoringEvent(
   event: ReturnType<typeof errorEvent>,
 ): Promise<MonitoringDelivery> {
-  const url = process.env.ERROR_MONITORING_WEBHOOK_URL;
-  if (!url) return { status: "not-configured", durationMs: 0 };
+  const apiKey = process.env.RESEND_API_KEY;
+  const to = process.env.ALERT_EMAIL_TO;
+  if (!apiKey || !to) return { status: "not-configured", durationMs: 0 };
 
+  const from = process.env.ALERT_EMAIL_FROM || "MindForge Alerts <onboarding@resend.dev>";
   const startedAt = performance.now();
   try {
-    const response = await fetch(url, {
+    const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(process.env.ERROR_MONITORING_WEBHOOK_TOKEN
-          ? { Authorization: `Bearer ${process.env.ERROR_MONITORING_WEBHOOK_TOKEN}` }
-          : {}),
+        Authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify(event),
-      signal: AbortSignal.timeout(2_000),
+      body: JSON.stringify({
+        from,
+        to: [to],
+        subject: `MindForge alert: ${event.action}`,
+        text: emailBody(event),
+      }),
+      signal: AbortSignal.timeout(5_000),
     });
     const durationMs = Math.round(performance.now() - startedAt);
 

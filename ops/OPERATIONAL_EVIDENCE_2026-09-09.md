@@ -53,6 +53,63 @@ so the SQL Editor's `postgres` session cannot revoke that grant. It creates no
 additional login, but it should be removed through a Supabase-supported admin
 path or the custom ownership model should be retired.
 
+### Automated encrypted off-site backup pipeline — verified end to end
+
+The Free-plan gap is now addressed by a retained-artifact control rather than a
+plan upgrade. `.github/workflows/backup.yml`, `scripts/backup-database.sh`, and
+`scripts/restore-drill.sh` were exercised completely against a local stand-in
+before any production credential was issued, so the pipeline is proven rather
+than merely written.
+
+Stand-in environment: PostgreSQL 18.6 source and verification servers in
+containers, MinIO as the S3-compatible object store, a purpose-generated age
+key pair, and the real Prisma migrations applied. The source was seeded with
+representative data including Devanagari text, Greek and mathematical symbols,
+and binary `Material.fileContent` bytes.
+
+| Measurement | Result |
+| --- | ---: |
+| Tables dumped and restored during pre-store verification | 10 of 10, matching source |
+| Plaintext archive | 20,897 bytes |
+| Encrypted artifact | 21,097 bytes |
+| Stored size confirmed at destination | Yes |
+| Drill: decrypt, restore, verify | Passed |
+| Applied migrations in restored database | 5 |
+| Unfinished or rolled-back migrations | 0 |
+| Row counts after recovery | Exact match with source |
+| Content fidelity | `Message.content` digest, `Material.fileContent` digest, and Devanagari titles all identical |
+
+Confidentiality was checked rather than assumed: the stored object begins with
+the `age-encryption.org/v1` header, and a byte search of the ciphertext for
+`learner@example.com`, `Test Learner`, `electron transport`, and the `PGDMP`
+dump header returned no match.
+
+Retention was checked with three artifacts present: the retained count tracked
+correctly at 1, 2, and 3, and the prune path deleted all three when the cutoff
+was moved past them.
+
+Three real defects were found and fixed by running the pipeline rather than
+reviewing it:
+
+1. A dump taken by a newer `pg_dump` fails to restore into an older server
+   (`unrecognized configuration parameter "transaction_timeout"`). The script
+   now compares client, source, and verification-target major versions up front
+   and fails with a specific message. `SUPABASE_PG_MAJOR` makes the alignment
+   explicit in CI.
+2. `pg_dump --schema=public` emits `CREATE SCHEMA public`, which collides with
+   the schema a fresh database already has. Both scripts now read the archive's
+   own table of contents instead of assuming.
+3. Retention date parsing disagreed between BSD and GNU `date` by the local UTC
+   offset. Both now resolve the same S3 `LastModified` string to an identical
+   epoch, confirmed by running the expression on macOS and Ubuntu.
+
+Limitations that remain: recovery granularity is one daily artifact, so up to
+24 hours of writes can be lost; the drill restores into a container rather than
+performing a production cutover; and losing the age identity makes every
+retained artifact permanently unrecoverable. No production bucket, key pair, or
+repository secret has been created yet — that setup is in
+`ops/BACKUP_RECOVERY.md` and is the operator's step.
+
 ## Human alert delivery
 
 ### First attempt — webhook transport, destination empty
@@ -108,6 +165,10 @@ require Pro with Observability Plus; see
    correlation ID in the destination inbox.
 2. Verify a sending domain in Resend and move `ALERT_EMAIL_FROM` off
    `onboarding@resend.dev` before more than one person needs to receive alerts.
-3. Before public launch, either upgrade Supabase and restore a managed backup to
-   a new project, or automate encrypted off-site logical backups with retention
-   and rerun this drill from one of those retained artifacts.
+3. **Mechanism met; not yet armed.** Automated encrypted off-site logical
+   backups with retention now exist and have been proven end to end, including
+   a recovery drill run from a stored artifact. Before public launch the
+   operator must complete `ops/BACKUP_RECOVERY.md`: generate and safely store
+   the age identity, create the bucket, add the repository secrets, run the
+   workflow once by hand, and record a drill against a real retained artifact.
+   Upgrading Supabase remains the only way to obtain point-in-time recovery.

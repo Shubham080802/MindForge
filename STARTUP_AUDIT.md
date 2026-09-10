@@ -43,7 +43,7 @@ development-mode review the owner approved.
 | Accessibility and responsive UX | Partial | The upload accessible-name and dark-theme brand contrast defects found in browser testing are fixed. Post-deploy Lighthouse accessibility is 100; automated axe, screen-reader, keyboard-only, 320 px, and 200% zoom sign-off remain absent. |
 | Performance | Partial | The production build succeeds; shared first-load JavaScript is about 102 kB, public home is about 194 kB, and the heaviest workspace route is about 216 kB. Post-deploy mobile Lighthouse measured performance 92, FCP 1.8 s, LCP 3.2 s, and TTI 3.4 s. OCR and document processing remain synchronous. |
 | Reliability | Runtime dependencies verified; scale controls pending | Public readiness distinguishes database and configuration failures, Upstash answers `PONG`, Gemini errors are surfaced to the client, server errors are structured, generated speech is cached per message/model/chunk to stay within free-tier limits, retention is scheduled, and the canonical health endpoint is green. No queue, retry ledger, provider fallback, or multi-region data plan exists. |
-| Operations | Logical recovery verified; managed controls pending | CI, additive migration, release/rollback, retention, incident response, and an interactive launch wizard are present. Supabase is deployed in `us-east-1`. A 12.56 MB logical archive restored all 10 public tables into isolated PostgreSQL in 335 ms with exact aggregate counts and five healthy migrations. The Free plan provides no scheduled backups, so managed restore/PITR timing remains unproven. The production alert drill now delivers email through Resend with an owner-confirmed correlation ID, though the unverified sending domain limits delivery to a single registered address. A named on-call owner, Clerk production domain, and retained off-site backups or a paid managed backup remain missing. |
+| Operations | Logical recovery verified; managed controls pending | CI, additive migration, release/rollback, retention, incident response, and an interactive launch wizard are present. Supabase is deployed in `us-east-1`. A 12.56 MB logical archive restored all 10 public tables into isolated PostgreSQL in 335 ms with exact aggregate counts and five healthy migrations. The Free plan provides no scheduled backups, so managed restore/PITR timing remains unproven. An automated encrypted off-site backup pipeline with retention now closes that gap on the free tier: dump, pre-store restore verification, age encryption to a key CI cannot read, S3-compatible upload, pruning, and failure alerting, all proven end to end against a containerised stand-in including a recovery drill from a stored artifact. It still needs the operator to create the key and bucket and add the secrets. The production alert drill now delivers email through Resend with an owner-confirmed correlation ID, though the unverified sending domain limits delivery to a single registered address. A named on-call owner, Clerk production domain, and retained off-site backups or a paid managed backup remain missing. |
 | Automated quality | Local pass; GitHub browser gate awaiting Clerk secrets | 66 behavioral unit tests, TypeScript, lint, production build, dependency audit, and five public browser checks pass locally. GitHub Actions reaches Playwright after its install, audit, migration, unit, type, lint, and build steps pass, but the local Playwright server cannot initialize Clerk because repository Clerk secrets are absent. The separate live authenticated audit passes manually. |
 
 ## Independent code re-audit — 2026-09-09
@@ -352,9 +352,12 @@ evidence, not as the current production state.
 1. Create/configure the Clerk production instance, require verified email,
    restrict authorized parties, add the production domain, and install its
    publishable/secret keys in Vercel.
-2. Upgrade Supabase and time a managed restore-to-new-project, or automate
-   encrypted off-site logical backups with retention. The isolated logical
-   recovery path is timed, but the Free plan supplies no recoverable backups.
+2. Arm the backup pipeline. Automated encrypted off-site logical backups with
+   retention are implemented and proven end to end, including a recovery drill
+   from a stored artifact. The operator must still generate and safely store the
+   age identity, create the bucket, add the repository secrets, and run it once;
+   see `ops/BACKUP_RECOVERY.md`. Upgrading Supabase remains the only route to
+   point-in-time recovery.
 3. Keep the restricted Gemini auth key and Upstash credentials under a documented
    rotation policy; never reuse Clerk, rate-limit, or retention secrets.
 4. Run the automated Clerk-authenticated staging journey. The test now exists and

@@ -1,0 +1,120 @@
+name: Database backup
+
+# The Supabase Free plan provides no recoverable managed backups, so this
+# workflow is the retained-artifact control the launch gate requires. It dumps
+# the database, PROVES the dump restores into a throwaway PostgreSQL of the
+# same major version, encrypts it to an age recipient the runner cannot
+# decrypt, uploads it off-site, and prunes past the retention window.
+#
+# Repository secrets required:
+#   BACKUP_DATABASE_URL   Supabase session-pooler URL (port 5432, not 6543).
+#   BACKUP_AGE_RECIPIENT  age PUBLIC key. The private identity never comes here.
+#   BACKUP_S3_BUCKET      Destination bucket.
+#   BACKUP_S3_ENDPOINT    S3-compatible endpoint (Cloudflare R2, Backblaze B2...).
+#   BACKUP_S3_ACCESS_KEY_ID / BACKUP_S3_SECRET_ACCESS_KEY
+#   RESEND_API_KEY, ALERT_EMAIL_TO   Optional; used only to report failure.
+#
+# Repository variables (optional):
+#   SUPABASE_PG_MAJOR     PostgreSQL major version of the Supabase project
+#                         (default 17). The client tools and the verification
+#                         service MUST match it: a dump taken by a newer
+#                         pg_dump cannot be restored into an older server.
+#   BACKUP_RETENTION_DAYS Default 30.
+
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: database-backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      verify:
+        image: postgres:${{ vars.SUPABASE_PG_MAJOR || '17' }}-alpine
+        env:
+          POSTGRES_USER: verify
+          POSTGRES_PASSWORD: verify
+          POSTGRES_DB: verify
+        ports: ["55433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U verify"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install backup tooling
+        env:
+          PG_MAJOR: ${{ vars.SUPABASE_PG_MAJOR || '17' }}
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] \
+            https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "postgresql-client-${PG_MAJOR}" age
+          pg_dump --version
+          age --version
+          aws --version
+
+      - name: Back up, verify, encrypt, and upload
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_VERIFY_URL: postgresql://verify:verify@127.0.0.1:55433/verify
+          BACKUP_AGE_RECIPIENT: ${{ secrets.BACKUP_AGE_RECIPIENT }}
+          BACKUP_S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+          BACKUP_S3_ENDPOINT: ${{ secrets.BACKUP_S3_ENDPOINT }}
+          BACKUP_S3_REGION: ${{ vars.BACKUP_S3_REGION || 'auto' }}
+          BACKUP_RETENTION_DAYS: ${{ vars.BACKUP_RETENTION_DAYS || '30' }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.BACKUP_S3_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.BACKUP_S3_SECRET_ACCESS_KEY }}
+          BACKUP_RECEIPT_PATH: ${{ runner.temp }}/receipt.json
+        run: ./scripts/backup-database.sh
+
+      # The receipt names the artifact and its checksum but carries no secret
+      # and no learner data, so it is safe in the run log of a public repo.
+      - name: Publish the backup receipt
+        run: |
+          {
+            echo '### Backup receipt'
+            echo '```json'
+            cat "${{ runner.temp }}/receipt.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # A backup that fails silently is worse than no backup at all.
+      - name: Report failure to the on-call address
+        if: failure()
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+          ALERT_EMAIL_FROM: ${{ vars.ALERT_EMAIL_FROM || 'MindForge Alerts <onboarding@resend.dev>' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RESEND_API_KEY:-}" ] || [ -z "${ALERT_EMAIL_TO:-}" ]; then
+            echo "::warning::Backup failed and no alert destination is configured."
+            exit 0
+          fi
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST https://api.resend.com/emails \
+            -H "Authorization: Bearer ${RESEND_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -nc --arg from "$ALERT_EMAIL_FROM" --arg to "$ALERT_EMAIL_TO" --arg url "$RUN_URL" \
+                  '{from:$from,to:[$to],subject:"MindForge alert: database backup FAILED",
+                    text:("The scheduled database backup did not complete.\n\nRun: " + $url +
+                          "\n\nNo new recovery artifact was stored. Investigate before the retention window expires the last good backup.")}')")
+          echo "Alert delivery HTTP ${status}"
+          [ "$status" = "200" ] || echo "::warning::Resend returned HTTP ${status}"

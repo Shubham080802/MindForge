@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAIConfig } from "@/lib/ai-client";
-import { DEFAULT_SPEECH_MODEL, generateGeminiSpeech } from "@/lib/gemini-speech";
+import { DEFAULT_SPEECH_MODEL, SPEECH_DECODE_SCHEME, generateGeminiSpeech } from "@/lib/gemini-speech";
 import { getOrCreateSpeechAudio, type SpeechAudioStore } from "@/lib/speech-cache";
 import { SPEECH_CHUNK_SCHEME, prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
 import { getStudyLanguage, isStudyLanguageCode } from "@/lib/study-languages";
@@ -51,7 +51,7 @@ async function createSpeechResponse(
 
   // The scheme is part of the key so audio cached under previous chunk
   // boundaries can never be served against a new chunk index.
-  const cacheKey = { messageId, chunkIndex, model: `${DEFAULT_SPEECH_MODEL}:${SPEECH_CHUNK_SCHEME}` };
+  const cacheKey = { messageId, chunkIndex, model: `${DEFAULT_SPEECH_MODEL}:${SPEECH_CHUNK_SCHEME}:${SPEECH_DECODE_SCHEME}` };
   const store: SpeechAudioStore = {
     read: async (key) => {
       const cached = await prisma.speechAudio.findUnique({

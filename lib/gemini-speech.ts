@@ -2,6 +2,12 @@ const GEMINI_SPEECH_ENDPOINT = "https://generativelanguage.googleapis.com/v1beta
 export const DEFAULT_SPEECH_MODEL = "gemini-3.1-flash-tts-preview";
 export const FALLBACK_SPEECH_MODEL = "gemini-2.5-flash-preview-tts";
 
+/**
+ * Identifies how audio bytes are decoded. It is part of the speech cache key,
+ * so audio stored by an earlier, incorrect decoding is never replayed.
+ */
+export const SPEECH_DECODE_SCHEME = "pcm-autodetect";
+
 type Fetcher = typeof fetch;
 
 interface GenerateGeminiSpeechOptions {
@@ -57,14 +63,62 @@ export function pcmToWav(
   return wav;
 }
 
-function l16ToLittleEndian(l16: Uint8Array): Uint8Array {
-  const pcm = Uint8Array.from(l16);
+export function swapByteOrder(source: Uint8Array): Uint8Array {
+  const pcm = Uint8Array.from(source);
   for (let index = 0; index + 1 < pcm.byteLength; index += 2) {
     const highByte = pcm[index]!;
     pcm[index] = pcm[index + 1]!;
     pcm[index + 1] = highByte;
   }
   return pcm;
+}
+
+/**
+ * Fraction of adjacent samples that change sign, reading the bytes as 16-bit
+ * little-endian. Speech sits around 0.1; the same bytes read in the wrong order
+ * look like noise, close to 0.4, which is the "bzzzz" a listener hears.
+ */
+export function zeroCrossingRate(pcm: Uint8Array): number {
+  const samples = Math.floor(pcm.byteLength / 2);
+  if (samples < 2) return 0;
+
+  const view = new DataView(pcm.buffer, pcm.byteOffset, samples * 2);
+  let crossings = 0;
+  let previous = view.getInt16(0, true);
+  for (let index = 1; index < samples; index += 1) {
+    const value = view.getInt16(index * 2, true);
+    if ((value < 0) !== (previous < 0)) crossings += 1;
+    previous = value;
+  }
+  return crossings / samples;
+}
+
+/** Roughly 40ms at 24kHz: below this there is no signal to judge. */
+const MIN_SAMPLES_TO_DETECT = 1_000;
+
+/**
+ * Gemini has returned big-endian L16 under more than one mime label, and a
+ * mislabelled response is inaudible rather than obviously broken -- the
+ * listener just hears buzzing. So the label is only trusted when the payload
+ * is too short to measure; otherwise the byte order that actually looks like
+ * speech wins, which stays correct however a future model labels its output.
+ */
+export function toLittleEndianPcm(
+  source: Uint8Array,
+  mimeType?: string,
+): { pcm: Uint8Array; swapped: boolean } {
+  const declaredBigEndian = Boolean(mimeType?.toLowerCase().startsWith("audio/l16"));
+
+  if (Math.floor(source.byteLength / 2) < MIN_SAMPLES_TO_DETECT) {
+    return declaredBigEndian
+      ? { pcm: swapByteOrder(source), swapped: true }
+      : { pcm: source, swapped: false };
+  }
+
+  const swapped = swapByteOrder(source);
+  return zeroCrossingRate(swapped) < zeroCrossingRate(source)
+    ? { pcm: swapped, swapped: true }
+    : { pcm: source, swapped: false };
 }
 
 export async function generateGeminiSpeech({
@@ -137,9 +191,7 @@ export async function generateGeminiSpeech({
   const decoded = Buffer.from(audio.data, "base64");
   if (audio.mimeType?.toLowerCase().startsWith("audio/wav")) return decoded;
 
-  const pcm = audio.mimeType?.toLowerCase().startsWith("audio/l16")
-    ? l16ToLittleEndian(decoded)
-    : decoded;
+  const { pcm } = toLittleEndianPcm(decoded, audio.mimeType);
 
   return pcmToWav(pcm, audio.sampleRate || 24_000, audio.channels || 1);
 }

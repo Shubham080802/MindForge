@@ -35,6 +35,9 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
       // default img-src blocked on every visit to the primary conversion page.
       // data: images cannot execute, and object-src stays 'none'.
       "img-src": ["'self'", "https://img.clerk.com", "data:"],
+      // Professor audio is fetched first so a failure's reason survives, then
+      // played from an object URL. Without blob: the element refuses it.
+      "media-src": ["'self'", "blob:"],
     },
   },
 });

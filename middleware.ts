@@ -1,6 +1,9 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
 import { routeAccess } from "@/lib/route-access";
+import { resolveAuthorizedParties } from "@/lib/clerk-authorized-parties";
+
+const authorizedParties = resolveAuthorizedParties(process.env);
 
 export default clerkMiddleware(async (auth, req: NextRequest) => {
   const access = routeAccess(req.nextUrl.pathname);
@@ -19,6 +22,10 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
   signInUrl.searchParams.set("redirect_url", req.url);
   return NextResponse.redirect(signInUrl);
 }, {
+  // Restricts which origins Clerk will accept session tokens for. Empty means
+  // Clerk keeps its default behaviour, so this cannot break a deployment that
+  // has no allowlist configured yet.
+  ...(authorizedParties.length ? { authorizedParties } : {}),
   contentSecurityPolicy: {
     directives: {
       "base-uri": ["'self'"],

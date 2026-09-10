@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAIConfig } from "@/lib/ai-client";
 import { DEFAULT_SPEECH_MODEL, generateGeminiSpeech } from "@/lib/gemini-speech";
 import { getOrCreateSpeechAudio, type SpeechAudioStore } from "@/lib/speech-cache";
-import { prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
+import { SPEECH_CHUNK_SCHEME, prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
 import { getStudyLanguage, isStudyLanguageCode } from "@/lib/study-languages";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
@@ -48,7 +48,9 @@ async function createSpeechResponse(
     return NextResponse.json({ message: "Speech segment not found" }, { status: 400 });
   }
 
-  const cacheKey = { messageId, chunkIndex, model: DEFAULT_SPEECH_MODEL };
+  // The scheme is part of the key so audio cached under previous chunk
+  // boundaries can never be served against a new chunk index.
+  const cacheKey = { messageId, chunkIndex, model: `${DEFAULT_SPEECH_MODEL}:${SPEECH_CHUNK_SCHEME}` };
   const store: SpeechAudioStore = {
     read: async (key) => {
       const cached = await prisma.speechAudio.findUnique({

@@ -311,8 +311,24 @@ export default function SessionPage() {
     setSpeakingMessageId(messageId);
     setSpeechNotice(`Preparing ${language.name} professor audio…`);
 
+    // Generating a chunk takes far longer than fetching one. Warming the next
+    // chunk while the current one plays keeps the gap between parts silent-free;
+    // even if the browser does not reuse this response for the media element,
+    // the server has already cached the generated audio by then.
+    const warmChunk = (index: number) => {
+      if (index >= chunks.length) return;
+      void fetch(getSpeechAudioUrl(sessionId, messageId, index), {
+        credentials: "include",
+        signal: controller.signal,
+      }).catch(() => {});
+    };
+
     try {
       for (let chunkIndex = 0; chunkIndex < chunks.length && !controller.signal.aborted; chunkIndex += 1) {
+        setSpeechNotice(chunks.length > 1
+          ? `Preparing ${language.name} audio · Part ${chunkIndex + 1} of ${chunks.length}…`
+          : `Preparing ${language.name} professor audio…`);
+        warmChunk(chunkIndex + 1);
         await playNativeAudio(
           audio,
           getSpeechAudioUrl(sessionId, messageId, chunkIndex),

@@ -202,11 +202,23 @@ export class SpeechProviderError extends Error {
     super(message);
     this.name = "SpeechProviderError";
   }
+
+  /**
+   * True when the provider refused for billing or quota reasons rather than
+   * anything wrong with the request. Retrying will not help; another provider
+   * will.
+   */
+  get isExhausted(): boolean {
+    return this.providerStatus === 402 || this.providerStatus === 429;
+  }
 }
 
 export function elevenLabsFailure(status: number, body: string): SpeechProviderError {
   if (status === 401) {
     return new SpeechProviderError("The ElevenLabs API key was rejected. Check it in the deployment settings.", status);
+  }
+  if (status === 402) {
+    return new SpeechProviderError("The ElevenLabs plan will not cover this request: credits are used up, or API access needs a paid plan.", status);
   }
   if (status === 429) {
     return new SpeechProviderError("ElevenLabs credits are exhausted or the rate limit was hit. Read-aloud will work again once quota is available.", status);

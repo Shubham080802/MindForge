@@ -163,6 +163,20 @@ describe("generateElevenLabsSpeech", () => {
     expect(elevenLabsFailure(500, "").message).toMatch(/HTTP 500/);
   });
 
+  it("names a billing refusal distinctly from a bad request", () => {
+    expect(elevenLabsFailure(402, "").message).toMatch(/credits are used up|paid plan/);
+    expect(elevenLabsFailure(422, "bad voice").message).toMatch(/rejected the request/);
+  });
+
+  // 402 and 429 mean retrying will not help, but another provider will.
+  it("marks billing and quota refusals as exhausted, and others not", () => {
+    expect(elevenLabsFailure(402, "").isExhausted).toBe(true);
+    expect(elevenLabsFailure(429, "").isExhausted).toBe(true);
+    expect(elevenLabsFailure(401, "").isExhausted).toBe(false);
+    expect(elevenLabsFailure(422, "").isExhausted).toBe(false);
+    expect(elevenLabsFailure(500, "").isExhausted).toBe(false);
+  });
+
   it("marks provider failures as safe to show, carrying no credential", () => {
     const failure = elevenLabsFailure(401, "");
 

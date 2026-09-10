@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAIConfig } from "@/lib/ai-client";
 import { generateGeminiSpeech } from "@/lib/gemini-speech";
 import { SpeechProviderError, chunkContextEnabled, generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
-import { resolveSpeechProvider, speechCacheScheme, speechContentType } from "@/lib/speech-provider";
+import { resolveSpeechProvider, speechCacheScheme, speechContentType, type SpeechProviderName } from "@/lib/speech-provider";
 import { getOrCreateSpeechAudio, type SpeechAudioStore } from "@/lib/speech-cache";
 import { SPEECH_CHUNK_SCHEME, prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
 import { getStudyLanguage, isStudyLanguageCode } from "@/lib/study-languages";
@@ -62,13 +62,13 @@ async function createSpeechResponse(
   }
 
   // The scheme is part of the key so audio cached under previous chunk
-  // boundaries can never be served against a new chunk index.
-  const provider = resolveSpeechProvider();
-  const cacheKey = {
+  // boundaries, or a different provider or voice, can never be served against
+  // a new chunk index.
+  const keyFor = (name: SpeechProviderName) => ({
     messageId,
     chunkIndex,
-    model: `${SPEECH_CHUNK_SCHEME}:${speechCacheScheme(provider, language.code)}`,
-  };
+    model: `${SPEECH_CHUNK_SCHEME}:${speechCacheScheme(name, language.code)}`,
+  });
   const store: SpeechAudioStore = {
     read: async (key) => {
       const cached = await prisma.speechAudio.findUnique({
@@ -86,25 +86,47 @@ async function createSpeechResponse(
       });
     },
   };
-  const result = await getOrCreateSpeechAudio(store, cacheKey, async () => {
+  const withGemini = () => getOrCreateSpeechAudio(store, keyFor("gemini"), async () => {
     await enforceRateLimit(request, "ai", userId);
-    if (provider === "elevenlabs") {
-      return generateElevenLabsSpeech({
-        text,
-        languageCode: language.code,
-        // Neighbouring chunks keep the joins from sounding clipped, at a
-        // billing cost ElevenLabs does not document. Opt in deliberately.
-        previousText: chunkContextEnabled() ? chunks[chunkIndex - 1] : undefined,
-        nextText: chunkContextEnabled() ? chunks[chunkIndex + 1] : undefined,
-        config: getElevenLabsConfig(process.env, language.code),
-      });
-    }
     return generateGeminiSpeech({
       text,
       locale: language.speechLocale,
       apiKey: getAIConfig().apiKey,
     });
   });
+
+  let provider = resolveSpeechProvider();
+  let result;
+
+  if (provider === "elevenlabs") {
+    try {
+      result = await getOrCreateSpeechAudio(store, keyFor("elevenlabs"), async () => {
+        await enforceRateLimit(request, "ai", userId);
+        return generateElevenLabsSpeech({
+          text,
+          languageCode: language.code,
+          // Neighbouring chunks keep the joins from sounding clipped, at a
+          // billing cost ElevenLabs does not document. Opt in deliberately.
+          previousText: chunkContextEnabled() ? chunks[chunkIndex - 1] : undefined,
+          nextText: chunkContextEnabled() ? chunks[chunkIndex + 1] : undefined,
+          config: getElevenLabsConfig(process.env, language.code),
+        });
+      });
+    } catch (error) {
+      // Out of credits is not a reason for the professor to fall silent. Gemini
+      // is less lifelike but free, so read-aloud degrades instead of breaking.
+      if (!(error instanceof SpeechProviderError && error.isExhausted)) throw error;
+      await reportServerError("Speech provider exhausted", error, {
+        providerStatus: error.providerStatus,
+        fallback: "gemini",
+      });
+      provider = "gemini";
+      result = await withGemini();
+    }
+  } else {
+    result = await withGemini();
+  }
+
   const audio = new Uint8Array(result.audio);
   const headers: Record<string, string> = {
     "Content-Type": speechContentType(provider),

@@ -1,5 +1,6 @@
 import { DEFAULT_SPEECH_MODEL, SPEECH_DECODE_SCHEME } from "@/lib/gemini-speech";
 import { ELEVENLABS_CONTENT_TYPE, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
+import type { StudyLanguageCode } from "@/lib/study-languages";
 
 export type SpeechProviderName = "elevenlabs" | "gemini";
 
@@ -32,11 +33,13 @@ export function speechContentType(provider: SpeechProviderName): string {
  */
 export function speechCacheScheme(
   provider: SpeechProviderName,
+  language: StudyLanguageCode = "en",
   env: SpeechEnvironment = process.env,
 ): string {
   if (provider === "gemini") return `${DEFAULT_SPEECH_MODEL}:${SPEECH_DECODE_SCHEME}`;
 
-  const { voiceId, model, modulation } = getElevenLabsConfig(env);
+  // The voice varies by language, so it has to be part of the key.
+  const { voiceId, model, modulation } = getElevenLabsConfig(env, language);
   const shape = [
     modulation.stability,
     modulation.similarityBoost,

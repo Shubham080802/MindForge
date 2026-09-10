@@ -8,6 +8,8 @@ import {
   elevenLabsFailure,
   generateElevenLabsSpeech,
   getElevenLabsConfig,
+  parseVoiceMap,
+  resolveVoiceForLanguage,
   resolveVoiceModulation,
   SpeechProviderError,
 } from "@/lib/elevenlabs-speech";
@@ -170,6 +172,42 @@ describe("generateElevenLabsSpeech", () => {
   });
 });
 
+describe("per-language voices", () => {
+  const MAP = { ...KEY, ELEVENLABS_VOICE_MAP: "hi=devi-id,zh=susan-id,default=mac-id" };
+
+  it("gives each mapped language its own voice", () => {
+    expect(resolveVoiceForLanguage("hi", MAP)).toBe("devi-id");
+    expect(resolveVoiceForLanguage("zh", MAP)).toBe("susan-id");
+  });
+
+  it("falls back to the default voice for unmapped languages", () => {
+    for (const language of ["en", "fr", "ja", "ko", "la"] as const) {
+      expect(resolveVoiceForLanguage(language, MAP)).toBe("mac-id");
+    }
+  });
+
+  it("prefers an explicit language entry over the default", () => {
+    expect(resolveVoiceForLanguage("hi", { ...MAP, ELEVENLABS_VOICE_ID: "ignored" })).toBe("devi-id");
+  });
+
+  it("uses ELEVENLABS_VOICE_ID when no map is configured", () => {
+    expect(resolveVoiceForLanguage("hi", { ...KEY, ELEVENLABS_VOICE_ID: "single-voice" })).toBe("single-voice");
+  });
+
+  it("ignores malformed map entries rather than failing", () => {
+    expect(parseVoiceMap("hi=devi-id,,broken,zh=susan-id,=,fr=")).toEqual({ hi: "devi-id", zh: "susan-id" });
+  });
+
+  it("tolerates spacing around entries", () => {
+    expect(parseVoiceMap(" hi = devi-id , zh = susan-id ")).toEqual({ hi: "devi-id", zh: "susan-id" });
+  });
+
+  // Two languages sharing a message id must not share cached audio.
+  it("keeps a separate cache identity per language", () => {
+    expect(speechCacheScheme("elevenlabs", "hi", MAP)).not.toBe(speechCacheScheme("elevenlabs", "zh", MAP));
+  });
+});
+
 describe("chunkContextEnabled", () => {
   it("is off by default, so unmeasured context cannot quietly cost credits", () => {
     expect(chunkContextEnabled({})).toBe(false);
@@ -205,20 +243,20 @@ describe("speech cache identity", () => {
   });
 
   it("changes when the voice changes, so old audio is not replayed", () => {
-    const first = speechCacheScheme("elevenlabs", KEY);
-    const second = speechCacheScheme("elevenlabs", { ...KEY, ELEVENLABS_VOICE_ID: "other-voice" });
+    const first = speechCacheScheme("elevenlabs", "en", KEY);
+    const second = speechCacheScheme("elevenlabs", "en", { ...KEY, ELEVENLABS_VOICE_ID: "other-voice" });
 
     expect(first).not.toBe(second);
   });
 
   it("changes when modulation changes", () => {
-    const first = speechCacheScheme("elevenlabs", KEY);
-    const second = speechCacheScheme("elevenlabs", { ...KEY, ELEVENLABS_STABILITY: "0.9" });
+    const first = speechCacheScheme("elevenlabs", "en", KEY);
+    const second = speechCacheScheme("elevenlabs", "en", { ...KEY, ELEVENLABS_STABILITY: "0.9" });
 
     expect(first).not.toBe(second);
   });
 
   it("keeps providers in separate namespaces", () => {
-    expect(speechCacheScheme("gemini", KEY)).not.toContain("elevenlabs");
+    expect(speechCacheScheme("gemini", "en", KEY)).not.toContain("elevenlabs");
   });
 });

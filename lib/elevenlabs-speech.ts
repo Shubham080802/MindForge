@@ -13,6 +13,16 @@ export const ELEVENLABS_SPEECH_ENDPOINT = "https://api.elevenlabs.io/v1/text-to-
 export const DEFAULT_ELEVENLABS_MODEL = "eleven_flash_v2_5";
 /** "George" from the shared voice library: a warm, unhurried narrator. */
 export const DEFAULT_ELEVENLABS_VOICE = "JBFqnCBsd6RMkjVDRZzb";
+
+/**
+ * Per-language voices. A voice recorded by a native speaker reads its own
+ * language far better than a multilingual model bending one voice to fit, so
+ * the professor changes voice with the explanation language.
+ *
+ * Voice identifiers are public, not credentials. Override without a deploy
+ * using ELEVENLABS_VOICE_MAP, e.g. "hi=<id>,zh=<id>,default=<id>".
+ */
+export const DEFAULT_LANGUAGE_VOICES: Partial<Record<StudyLanguageCode, string>> = {};
 /** MP3 instead of raw PCM: roughly a twentieth of the bytes, and no byte order to get wrong. */
 export const DEFAULT_ELEVENLABS_OUTPUT_FORMAT = "mp3_44100_128";
 export const ELEVENLABS_CONTENT_TYPE = "audio/mpeg";
@@ -74,6 +84,34 @@ export function resolveVoiceModulation(env: SpeechEnvironment = process.env): Vo
   };
 }
 
+/** Parses "hi=abc,zh=def,default=ghi" into a lookup, ignoring malformed entries. */
+export function parseVoiceMap(raw: string | undefined): Record<string, string> {
+  if (!raw) return {};
+
+  const map: Record<string, string> = {};
+  for (const entry of raw.split(",")) {
+    const [key, value] = entry.split("=");
+    const language = key?.trim().toLowerCase();
+    const voice = value?.trim();
+    if (language && voice) map[language] = voice;
+  }
+  return map;
+}
+
+export function resolveVoiceForLanguage(
+  language: StudyLanguageCode,
+  env: SpeechEnvironment = process.env,
+): string {
+  const configured = parseVoiceMap(env.ELEVENLABS_VOICE_MAP);
+
+  return configured[language]
+    ?? DEFAULT_LANGUAGE_VOICES[language]
+    ?? configured.default
+    ?? env.ELEVENLABS_VOICE_ID?.trim()
+    ?? DEFAULT_LANGUAGE_VOICES.en
+    ?? DEFAULT_ELEVENLABS_VOICE;
+}
+
 export interface ElevenLabsConfig {
   apiKey: string;
   voiceId: string;
@@ -82,13 +120,16 @@ export interface ElevenLabsConfig {
   modulation: VoiceModulation;
 }
 
-export function getElevenLabsConfig(env: SpeechEnvironment = process.env): ElevenLabsConfig {
+export function getElevenLabsConfig(
+  env: SpeechEnvironment = process.env,
+  language: StudyLanguageCode = "en",
+): ElevenLabsConfig {
   const apiKey = env.ELEVENLABS_API_KEY?.trim();
   if (!apiKey) throw new Error("ELEVENLABS_API_KEY is not configured");
 
   return {
     apiKey,
-    voiceId: env.ELEVENLABS_VOICE_ID?.trim() || DEFAULT_ELEVENLABS_VOICE,
+    voiceId: resolveVoiceForLanguage(language, env),
     model: env.ELEVENLABS_MODEL?.trim() || DEFAULT_ELEVENLABS_MODEL,
     outputFormat: env.ELEVENLABS_OUTPUT_FORMAT?.trim() || DEFAULT_ELEVENLABS_OUTPUT_FORMAT,
     modulation: resolveVoiceModulation(env),

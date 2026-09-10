@@ -67,7 +67,7 @@ async function createSpeechResponse(
   const cacheKey = {
     messageId,
     chunkIndex,
-    model: `${SPEECH_CHUNK_SCHEME}:${speechCacheScheme(provider)}`,
+    model: `${SPEECH_CHUNK_SCHEME}:${speechCacheScheme(provider, language.code)}`,
   };
   const store: SpeechAudioStore = {
     read: async (key) => {
@@ -96,7 +96,7 @@ async function createSpeechResponse(
         // billing cost ElevenLabs does not document. Opt in deliberately.
         previousText: chunkContextEnabled() ? chunks[chunkIndex - 1] : undefined,
         nextText: chunkContextEnabled() ? chunks[chunkIndex + 1] : undefined,
-        config: getElevenLabsConfig(),
+        config: getElevenLabsConfig(process.env, language.code),
       });
     }
     return generateGeminiSpeech({

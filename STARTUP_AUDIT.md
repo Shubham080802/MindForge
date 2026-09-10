@@ -349,9 +349,13 @@ evidence, not as the current production state.
 
 ### P0 — required before inviting users
 
-1. Create/configure the Clerk production instance, require verified email,
-   restrict authorized parties, add the production domain, and install its
-   publishable/secret keys in Vercel.
+1. Complete the Clerk production cutover; `ops/CLERK_PRODUCTION.md` is the
+   procedure. Verified email is already required, authorized parties are now
+   enforced through `clerkMiddleware()`, and the application is renamed to
+   MindForge. The instance itself is **blocked on owning a domain**: Clerk
+   requires DNS records, and `mind-forge-ashy.vercel.app` sits in a zone Vercel
+   controls. Production also needs its own Google OAuth credentials, since
+   development uses Clerk's shared ones.
 2. Arm the backup pipeline. Automated encrypted off-site logical backups with
    retention are implemented and proven end to end, including a recovery drill
    from a stored artifact. The operator must still generate and safely store the

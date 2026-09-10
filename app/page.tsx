@@ -20,7 +20,7 @@ const features = [
   {
     icon: Mic,
     title: "Multilingual voice playback",
-    description: "Choose your explanation language and listen with a matching browser voice when your device supports one.",
+    description: "Choose your explanation language and listen to generated professor audio in that language.",
   },
 ];
 

@@ -66,7 +66,7 @@ describe("getElevenLabsConfig", () => {
   it("defaults the voice, model and format", () => {
     const config = getElevenLabsConfig(KEY);
 
-    expect(config.voiceId).toBe(DEFAULT_ELEVENLABS_VOICE);
+    expect(config.voiceId).toBe("5gcJMSHPvZx5Ja5NGaUl");
     expect(config.model).toBe(DEFAULT_ELEVENLABS_MODEL);
     expect(config.outputFormat).toBe("mp3_44100_128");
   });
@@ -143,7 +143,7 @@ describe("generateElevenLabsSpeech", () => {
 
     expect(Array.from(audio)).toEqual([1, 2, 3]);
     const [url, init] = fetcher.mock.calls[0]! as unknown as [string, RequestInit];
-    expect(url).toContain(`/${DEFAULT_ELEVENLABS_VOICE}?output_format=mp3_44100_128`);
+    expect(url).toContain("/5gcJMSHPvZx5Ja5NGaUl?output_format=mp3_44100_128");
     expect((init.headers as Record<string, string>)["xi-api-key"]).toBe("el-test-key");
   });
 
@@ -190,9 +190,30 @@ describe("per-language voices", () => {
     expect(resolveVoiceForLanguage("hi", { ...MAP, ELEVENLABS_VOICE_ID: "ignored" })).toBe("devi-id");
   });
 
-  it("uses ELEVENLABS_VOICE_ID when no map is configured", () => {
-    expect(resolveVoiceForLanguage("hi", { ...KEY, ELEVENLABS_VOICE_ID: "single-voice" })).toBe("single-voice");
+  it("gives Hindi and Mandarin their own native-speaker voices", () => {
+    expect(resolveVoiceForLanguage("en", KEY)).toBe("5gcJMSHPvZx5Ja5NGaUl");
+    expect(resolveVoiceForLanguage("hi", KEY)).toBe("MF4J4IDTRo0AxOO4dpFR");
+    expect(resolveVoiceForLanguage("zh", KEY)).toBe("kAIqZ7fZv234ClKXwzDx");
   });
+
+  it("reads the remaining languages in the English voice", () => {
+    for (const language of ["es", "fr", "de", "pt", "ja", "ko", "la"] as const) {
+      expect(resolveVoiceForLanguage(language, KEY)).toBe("5gcJMSHPvZx5Ja5NGaUl");
+    }
+  });
+
+  it("keeps the three shipped voices distinct", () => {
+    const voices = new Set(["en", "hi", "zh"].map((l) => resolveVoiceForLanguage(l as "en", KEY)));
+
+    expect(voices.size).toBe(3);
+  });
+
+  it("lets configuration override a shipped default", () => {
+    expect(resolveVoiceForLanguage("hi", { ...KEY, ELEVENLABS_VOICE_MAP: "hi=other" })).toBe("other");
+    expect(resolveVoiceForLanguage("hi", { ...KEY, ELEVENLABS_VOICE_ID: "single" })).toBe("single");
+  });
+
+
 
   it("ignores malformed map entries rather than failing", () => {
     expect(parseVoiceMap("hi=devi-id,,broken,zh=susan-id,=,fr=")).toEqual({ hi: "devi-id", zh: "susan-id" });

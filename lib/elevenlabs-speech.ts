@@ -22,7 +22,15 @@ export const DEFAULT_ELEVENLABS_VOICE = "JBFqnCBsd6RMkjVDRZzb";
  * Voice identifiers are public, not credentials. Override without a deploy
  * using ELEVENLABS_VOICE_MAP, e.g. "hi=<id>,zh=<id>,default=<id>".
  */
-export const DEFAULT_LANGUAGE_VOICES: Partial<Record<StudyLanguageCode, string>> = {};
+export const DEFAULT_LANGUAGE_VOICES: Partial<Record<StudyLanguageCode, string>> = {
+  // Mac, a relaxed and balanced narrator. Also the fallback for every language
+  // below that has no voice of its own.
+  en: "5gcJMSHPvZx5Ja5NGaUl",
+  // Devi, a native Hindi speaker.
+  hi: "MF4J4IDTRo0AxOO4dpFR",
+  // Susan, a native Mandarin speaker.
+  zh: "kAIqZ7fZv234ClKXwzDx",
+};
 /** MP3 instead of raw PCM: roughly a twentieth of the bytes, and no byte order to get wrong. */
 export const DEFAULT_ELEVENLABS_OUTPUT_FORMAT = "mp3_44100_128";
 export const ELEVENLABS_CONTENT_TYPE = "audio/mpeg";
@@ -104,12 +112,14 @@ export function resolveVoiceForLanguage(
 ): string {
   const configured = parseVoiceMap(env.ELEVENLABS_VOICE_MAP);
 
+  // Explicit configuration always beats a shipped default, most specific
+  // first, so an operator can reassign voices without editing the code.
   return configured[language]
-    ?? DEFAULT_LANGUAGE_VOICES[language]
-    ?? configured.default
-    ?? env.ELEVENLABS_VOICE_ID?.trim()
-    ?? DEFAULT_LANGUAGE_VOICES.en
-    ?? DEFAULT_ELEVENLABS_VOICE;
+    || configured.default
+    || env.ELEVENLABS_VOICE_ID?.trim()
+    || DEFAULT_LANGUAGE_VOICES[language]
+    || DEFAULT_LANGUAGE_VOICES.en
+    || DEFAULT_ELEVENLABS_VOICE;
 }
 
 export interface ElevenLabsConfig {

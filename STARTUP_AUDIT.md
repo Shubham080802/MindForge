@@ -1,6 +1,7 @@
 # MindForge product and launch audit
 
-Audited: 2026-09-07; live verification updated 2026-09-08. Scope: positioning, acquisition, onboarding, identity,
+Audited: 2026-09-07; live verification updated 2026-09-08; independent code re-audit
+2026-09-09. Scope: positioning, acquisition, onboarding, identity,
 core learning journey, trust, accessibility, performance, data, reliability,
 operations, testing, and production deployment.
 
@@ -44,6 +45,81 @@ development-mode review the owner approved.
 | Reliability | Runtime dependencies verified; scale controls pending | Public readiness distinguishes database and configuration failures, Upstash answers `PONG`, Gemini errors are surfaced to the client, server errors are structured, generated speech is cached per message/model/chunk to stay within free-tier limits, retention is scheduled, and the canonical health endpoint is green. No queue, retry ledger, provider fallback, or multi-region data plan exists. |
 | Operations | Logical recovery verified; managed controls pending | CI, additive migration, release/rollback, retention, incident response, and an interactive launch wizard are present. Supabase is deployed in `us-east-1`. A 12.56 MB logical archive restored all 10 public tables into isolated PostgreSQL in 335 ms with exact aggregate counts and five healthy migrations. The Free plan provides no scheduled backups, so managed restore/PITR timing remains unproven. The production alert drill now delivers email through Resend with an owner-confirmed correlation ID, though the unverified sending domain limits delivery to a single registered address. A named on-call owner, Clerk production domain, and retained off-site backups or a paid managed backup remain missing. |
 | Automated quality | Local pass; GitHub browser gate awaiting Clerk secrets | 66 behavioral unit tests, TypeScript, lint, production build, dependency audit, and five public browser checks pass locally. GitHub Actions reaches Playwright after its install, audit, migration, unit, type, lint, and build steps pass, but the local Playwright server cannot initialize Clerk because repository Clerk secrets are absent. The separate live authenticated audit passes manually. |
+
+## Independent code re-audit — 2026-09-09
+
+This pass re-verified the claims above from source rather than accepting them,
+and found four defects that live browser testing had not surfaced. All four are
+fixed in this commit.
+
+### Findings and resolutions
+
+1. **PDF export returned HTTP 500 for most real study content.** `generatePdf`
+   drew message text with pdf-lib's standard Helvetica, which encodes only
+   WinAnsi. A probe against the installed pdf-lib confirmed that `α`, `→`, `∫`,
+   `≈`, `₂`, and every Devanagari, CJK, Cyrillic, and emoji character throws
+   `WinAnsi cannot encode`. The failure therefore hit two advertised features at
+   once: multilingual explanations, and any STEM session whose answer contains a
+   Greek letter or an arrow. The client discarded the server message and showed
+   only `Failed to export`.
+
+   `lib/pdf-text.ts` is now the single seam between study text and the PDF
+   canvas. It transliterates the symbols learners actually meet (`∫` to
+   `integral`, `α` to `alpha`, `H₂O` to `H2O`, `≥` to `>=`), drops what no Latin
+   glyph can represent, and counts the lost letters and digits. When a session is
+   written in a script Helvetica cannot render at all, export now returns HTTP
+   422 with `PDF_SCRIPT_UNSUPPORTED` and directs the learner to Markdown or JSON,
+   which preserve every character — an honest refusal instead of a crash or a
+   blank document. The workspace surfaces that message. Fifteen tests cover it,
+   including assertions that every character the module emits is actually
+   drawable by pdf-lib and that the raw source would have thrown.
+
+2. **`/api/export` was the only unvalidated mutation.** It destructured
+   `request.json()` directly and wrote client-supplied `toolResults` of unbounded
+   size into the response. It now parses through `exportInput`, which constrains
+   the session identifier, the format, and the tool-result payload to 200 kB.
+
+3. **A provider failure was persisted as the professor's own words.** The
+   non-streaming branch of `POST /api/sessions/[sessionId]/messages` saved
+   `"I encountered an error while generating a response."` as an assistant
+   message. That text then re-entered the next request as conversation history.
+   The route now returns HTTP 502 and persists nothing. The browser client only
+   streams, so no shipped UI produced this, but the API did.
+
+4. **Study tools accepted a free-text prompt that bypassed the study-only
+   boundary.** `studyToolInput.content` allowed 20,000 characters that were sent
+   to the model in place of the session's materials, with none of the scope
+   enforcement applied to `/api/sessions` and the message route. The client
+   always sent an empty string, so the field was pure abuse surface; it is
+   removed from the schema, the route, and the client rather than guarded.
+
+Repository hygiene: `tsconfig.tsbuildinfo` was tracked and is now ignored.
+
+### Launch-gate coverage added
+
+`e2e/authenticated.spec.ts` now automates the value-delivering journey the P0
+list required and that had only been completed by hand: upload, a grounded
+professor answer, study-tool generation, a real Markdown export download whose
+bytes are asserted, session deletion from Library, sign-out, and a post-sign-out
+check that protected APIs return HTTP 401. Running it still requires the
+disposable Clerk test learner and development keys.
+
+### Verified in this pass
+
+- `vitest`: 21 files, 87 tests passing (was 19 files, 66 tests).
+- TypeScript, ESLint, and the Next.js production build: clean. Shared first-load
+  JavaScript is unchanged at 102 kB; the heaviest workspace route is 216 kB.
+- `pnpm audit --prod --audit-level high`: no known vulnerabilities.
+- Playwright public suite: 5 of 5 passing.
+- Secret hygiene: no credential file is tracked; `.env.local` is ignored.
+
+### Confirmed sound, not changed
+
+Clerk server authentication is repeated at every resource boundary; every
+material and session query is scoped by the internal user ID; mutations enforce
+same-origin; rate limits are applied on all six AI, upload, and export routes and
+fail closed in production; internal endpoints compare their bearer secret in
+constant time; and Prisma cascades cover account deletion.
 
 ## Live Vercel audit
 
@@ -281,9 +357,10 @@ evidence, not as the current production state.
    recovery path is timed, but the Free plan supplies no recoverable backups.
 3. Keep the restricted Gemini auth key and Upstash credentials under a documented
    rotation policy; never reuse Clerk, rate-limit, or retention secrets.
-4. Add an automated Clerk-authenticated staging run covering upload, AI response,
-   study tools, library visibility, deletion, and sign-out. The same journey has
-   been completed manually in production development mode.
+4. Run the automated Clerk-authenticated staging journey. The test now exists and
+   covers upload, AI response, study tools, export, library visibility, deletion,
+   and sign-out; it still needs a disposable Clerk test learner and development
+   keys supplied to `pnpm test:e2e:staging`.
 5. Approve Privacy/Terms and assign incident ownership. The human-facing alert
    destination is configured and its correlation ID is confirmed; verify a
    Resend sending domain so alerts can reach more than the single registered

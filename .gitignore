@@ -16,3 +16,4 @@ ops/launch-signoff.local.md
 /playwright/.clerk
 .clerk/
 .vercel
+tsconfig.tsbuildinfo

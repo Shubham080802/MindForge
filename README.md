@@ -10,7 +10,9 @@ Clerk, Prisma, PostgreSQL, Google Gemini, and Upstash Redis.
 - Account-scoped sessions, professor–student tutoring, search, source downloads, and deletion
 - Student-controlled multilingual explanations and matching browser speech voices
 - Summaries, concepts, flashcards, quizzes, study plans, and translation
-- JSON, Markdown, and PDF exports
+- JSON, Markdown, and PDF exports. PDF uses a Latin font: scientific symbols
+  are transliterated, and a session written in a non-Latin script is refused
+  with a pointer to Markdown or JSON, which preserve every character.
 - Profile preferences, theme control, account deletion, legal and support pages
 - Distributed production rate limits, audit events, structured error delivery,
   readiness checks, and scheduled retention cleanup

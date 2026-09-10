@@ -28,7 +28,7 @@ Format as JSON with: { "questions": [{ "question": "...", "type": "multiple_choi
 Format as JSON with: { "translatedContent": "..." }`,
 };
 
-async function buildContextFromMaterials(materials: Array<{ extractedText: string | null; url: string; type: string }>) {
+function buildContextFromMaterials(materials: Array<{ extractedText: string | null; url: string; type: string }>) {
   return materials
     .filter((m) => m.extractedText && m.extractedText.length > 0)
     .map((m, i) => `--- Material ${i + 1} (${m.url.split("/").pop() || "Document"}) ---\n${m.extractedText?.slice(0, 4000)}`)
@@ -45,7 +45,7 @@ export async function POST(
     await enforceRateLimit(request, "ai", auth.userId);
 
     const { sessionId } = await params;
-    const { tool, content, targetLanguage } = await parseJson(request, studyToolInput);
+    const { tool, targetLanguage } = await parseJson(request, studyToolInput);
 
     // Verify session ownership
     const sessionData = await prisma.session.findFirst({
@@ -57,7 +57,7 @@ export async function POST(
       return NextResponse.json({ message: "Session not found" }, { status: 404 });
     }
 
-    const context = await buildContextFromMaterials(sessionData.materials);
+    const context = buildContextFromMaterials(sessionData.materials);
 
     if (!context) {
       return NextResponse.json({ message: "No study materials with extractable text found" }, { status: 400 });
@@ -72,7 +72,7 @@ export async function POST(
 
     const messages = [
       { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: content || context },
+      { role: "user" as const, content: context },
     ];
 
     const completion = await ai.chat.completions.create({

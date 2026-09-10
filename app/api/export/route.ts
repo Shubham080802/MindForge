@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { internalError, requireMutation } from "@/lib/request-guard";
+import { internalError, parseJson, requireMutation } from "@/lib/request-guard";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { exportInput } from "@/lib/validation";
+import { PDF_SCRIPT_UNSUPPORTED_MESSAGE, assessPdfScriptSupport, toPdfSafeText } from "@/lib/pdf-text";
 
 export const runtime = "nodejs";
 
@@ -23,8 +25,9 @@ async function generatePdf(
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
   let y = pageHeight - margin;
 
-  const addText = (text: string, fontSize = 12, isBold = false, color = rgb(0, 0, 0)) => {
+  const addText = (rawText: string, fontSize = 12, isBold = false, color = rgb(0, 0, 0)) => {
     const f = isBold ? boldFont : font;
+    const text = toPdfSafeText(rawText).text;
     const lines = f.widthOfTextAtSize(text, fontSize) > contentWidth
       ? wrapText(text, fontSize, contentWidth, f)
       : [text];
@@ -40,8 +43,8 @@ async function generatePdf(
     return lines.length;
   };
 
-  const wrapText = (text: string, fontSize: number, maxWidth: number, font: any): string[] => {
-    const words = text.split(" ");
+  const wrapText = (rawText: string, fontSize: number, maxWidth: number, font: any): string[] => {
+    const words = toPdfSafeText(rawText).text.split(" ");
     const lines: string[] = [];
     let currentLine = "";
     
@@ -135,11 +138,7 @@ export async function POST(request: NextRequest) {
     if ("error" in auth) return auth.error;
     await enforceRateLimit(request, "export", auth.userId);
 
-    const { sessionId, format, content, toolResults, toolName } = await request.json();
-
-    if (!sessionId || !format || !["markdown", "json", "pdf"].includes(format)) {
-      return NextResponse.json({ message: "Invalid parameters" }, { status: 400 });
-    }
+    const { sessionId, format, toolResults, toolName } = await parseJson(request, exportInput);
 
     const sessionData = await prisma.session.findFirst({
       where: { id: sessionId, userId: auth.userId },
@@ -222,6 +221,21 @@ export async function POST(request: NextRequest) {
     }
 
     if (format === "pdf") {
+      // Helvetica cannot draw non-Latin scripts. Refuse with a route the
+      // learner can actually take instead of emitting a blank document.
+      const support = assessPdfScriptSupport([
+        sessionData.title,
+        ...sessionData.materials.map((material) => material.fileName),
+        ...sessionData.messages.map((message) => message.content),
+        JSON.stringify(toolResults ?? {}),
+      ]);
+      if (!support.supported) {
+        return NextResponse.json(
+          { message: PDF_SCRIPT_UNSUPPORTED_MESSAGE, code: "PDF_SCRIPT_UNSUPPORTED" },
+          { status: 422 },
+        );
+      }
+
       if (toolName && toolResults && toolResults[toolName]) {
         // Export single tool result
         const singleToolResults: Record<string, any> = { [toolName]: toolResults[toolName] };

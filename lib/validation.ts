@@ -19,9 +19,22 @@ export const profileUpdateInput = z.object({
 
 export const studyToolInput = z.object({
   tool: z.enum(["summary", "concepts", "quiz", "translate"]),
-  content: z.string().max(20_000).optional(),
   targetLanguage: z.enum(STUDY_LANGUAGE_CODES).optional(),
 });
+
+/**
+ * Export accepts client-held study-tool results, so it needs the same bounded
+ * parsing as every other mutation rather than a raw `request.json()`.
+ */
+export const exportInput = z.object({
+  sessionId: z.string().cuid(),
+  format: z.enum(["markdown", "json", "pdf"]),
+  toolName: z.string().trim().max(40).optional(),
+  toolResults: z.record(z.unknown()).optional(),
+}).refine(
+  (input) => JSON.stringify(input.toolResults ?? {}).length <= 200_000,
+  { message: "Study-tool results are too large to export", path: ["toolResults"] },
+);
 
 export const subjectInput = z.object({
   name: z.string().trim().min(1).max(120),

@@ -11,11 +11,6 @@ import { enforceStudyScope } from "@/lib/study-scope-server";
 
 export const runtime = "nodejs";
 
-function createSSEStream(controller: ReadableStreamDefaultController, text: string) {
-  const encoder = new TextEncoder();
-  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ content: text })}\n\n`));
-}
-
 function closeSSEStream(controller: ReadableStreamDefaultController) {
   controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
   controller.close();
@@ -154,13 +149,18 @@ export async function POST(
         ...generationOptions,
       });
 
-      aiContent = completion.choices[0]?.message?.content || "I couldn't generate a response.";
+      aiContent = completion.choices[0]?.message?.content?.trim() || "";
     } catch (aiError) {
       await reportServerError("AI completion", aiError, { sessionId });
-      aiContent = "I encountered an error while generating a response. Please try again.";
     }
 
-    // Save assistant message
+    if (!aiContent) {
+      return NextResponse.json(
+        { message: "Professor MindForge could not generate a response. Please try again." },
+        { status: 502 },
+      );
+    }
+
     const assistantMessage = await saveAssistant(aiContent);
 
     return NextResponse.json({ message: assistantMessage });

@@ -109,7 +109,7 @@ export default function SessionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ tool, content: "", targetLanguage: tool === "translate" ? explanationLanguage : undefined }),
+        body: JSON.stringify({ tool, targetLanguage: tool === "translate" ? explanationLanguage : undefined }),
       });
 
       if (!res.ok) {
@@ -145,7 +145,10 @@ export default function SessionPage() {
         }),
       });
 
-      if (!res.ok) throw new Error("Export failed");
+      if (!res.ok) {
+        const failure = await res.json().catch(() => ({}));
+        throw new Error(failure.message || "Export failed");
+      }
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -159,7 +162,7 @@ export default function SessionPage() {
       URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Export error:", error);
-      alert("Failed to export");
+      alert(error instanceof Error ? error.message : "Failed to export");
     } finally {
       setExportProgress({ active: false });
     }

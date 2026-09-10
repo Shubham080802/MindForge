@@ -311,10 +311,11 @@ export default function SessionPage() {
     setSpeakingMessageId(messageId);
     setSpeechNotice(`Preparing ${language.name} professor audio…`);
 
-    // Generating a chunk takes far longer than fetching one. Warming the next
-    // chunk while the current one plays keeps the gap between parts silent-free;
-    // even if the browser does not reuse this response for the media element,
-    // the server has already cached the generated audio by then.
+    // Generating a chunk takes far longer than fetching one, so the next chunk
+    // is warmed while the current one plays. It must not start any earlier:
+    // a serverless instance serves one request at a time, so a prefetch issued
+    // alongside the current chunk queues that chunk behind a full generation
+    // and delays the very audio the listener is waiting for.
     const warmChunk = (index: number) => {
       if (index >= chunks.length) return;
       void fetch(getSpeechAudioUrl(sessionId, messageId, index), {
@@ -328,12 +329,14 @@ export default function SessionPage() {
         setSpeechNotice(chunks.length > 1
           ? `Preparing ${language.name} audio · Part ${chunkIndex + 1} of ${chunks.length}…`
           : `Preparing ${language.name} professor audio…`);
-        warmChunk(chunkIndex + 1);
         await playNativeAudio(
           audio,
           getSpeechAudioUrl(sessionId, messageId, chunkIndex),
           controller.signal,
-          () => setSpeechNotice(`Reading in ${language.name} · Part ${chunkIndex + 1} of ${chunks.length}`),
+          () => {
+            setSpeechNotice(`Reading in ${language.name} · Part ${chunkIndex + 1} of ${chunks.length}`);
+            warmChunk(chunkIndex + 1);
+          },
         );
       }
 

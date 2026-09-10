@@ -12,7 +12,7 @@ describe("splitSpeechText", () => {
   it("keeps the first chunk short so playback can start quickly", () => {
     const [lead] = splitSpeechText(sentence.repeat(40));
 
-    expect(lead.length).toBeLessThanOrEqual(SPEECH_LEAD_CHUNK_LENGTH);
+    expect(lead!.length).toBeLessThanOrEqual(SPEECH_LEAD_CHUNK_LENGTH);
   });
 
   it("uses the full chunk length after the lead", () => {

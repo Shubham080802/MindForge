@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAIConfig } from "@/lib/ai-client";
 import { generateGeminiSpeech } from "@/lib/gemini-speech";
-import { chunkContextEnabled, generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
+import { SpeechProviderError, chunkContextEnabled, generateElevenLabsSpeech, getElevenLabsConfig } from "@/lib/elevenlabs-speech";
 import { resolveSpeechProvider, speechCacheScheme, speechContentType } from "@/lib/speech-provider";
 import { getOrCreateSpeechAudio, type SpeechAudioStore } from "@/lib/speech-cache";
 import { SPEECH_CHUNK_SCHEME, prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
@@ -10,6 +10,7 @@ import { getStudyLanguage, isStudyLanguageCode } from "@/lib/study-languages";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { speechChunkInput } from "@/lib/validation";
+import { reportServerError } from "@/lib/observability";
 import { contentRangeHeader, resolveByteRange, unsatisfiableRangeHeader } from "@/lib/http-range";
 
 export const runtime = "nodejs";
@@ -22,6 +23,15 @@ function messageLanguage(metadata: unknown) {
 }
 
 type SpeechRouteContext = { params: Promise<{ sessionId: string; messageId: string }> };
+
+/** A provider's own reason is more actionable than "request could not be completed". */
+async function speechError(error: unknown) {
+  if (error instanceof SpeechProviderError) {
+    await reportServerError("Generate speech", error, { providerStatus: error.providerStatus });
+    return NextResponse.json({ message: error.message }, { status: 502 });
+  }
+  return internalError("Generate speech", error);
+}
 
 async function createSpeechResponse(
   request: NextRequest,
@@ -145,7 +155,7 @@ export async function GET(request: NextRequest, context: SpeechRouteContext) {
     });
     return await createSpeechResponse(request, context, auth.userId, chunkIndex);
   } catch (error) {
-    return internalError("Generate speech", error);
+    return speechError(error);
   }
 }
 
@@ -156,6 +166,6 @@ export async function POST(request: NextRequest, context: SpeechRouteContext) {
     const { chunkIndex } = await parseJson(request, speechChunkInput);
     return await createSpeechResponse(request, context, auth.userId, chunkIndex);
   } catch (error) {
-    return internalError("Generate speech", error);
+    return speechError(error);
   }
 }

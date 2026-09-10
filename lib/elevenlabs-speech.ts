@@ -140,11 +140,30 @@ export function buildElevenLabsRequest({
   };
 }
 
-export function elevenLabsFailure(status: number, body: string): Error {
-  if (status === 401) return new Error("ElevenLabs rejected the API key.");
-  if (status === 429) return new Error("ElevenLabs quota or rate limit reached. Please try again shortly.");
-  if (status === 422) return new Error(`ElevenLabs could not read the request (${body.slice(0, 160)})`);
-  return new Error(`ElevenLabs speech request failed (${status})`);
+/**
+ * A provider failure whose reason is safe to show the learner. "Out of credits"
+ * and "the key is wrong" are things the operator needs to see immediately, and
+ * a generic 500 hides exactly the information that makes them fixable. Carries
+ * no key, no URL and no provider response body.
+ */
+export class SpeechProviderError extends Error {
+  constructor(message: string, readonly providerStatus: number) {
+    super(message);
+    this.name = "SpeechProviderError";
+  }
+}
+
+export function elevenLabsFailure(status: number, body: string): SpeechProviderError {
+  if (status === 401) {
+    return new SpeechProviderError("The ElevenLabs API key was rejected. Check it in the deployment settings.", status);
+  }
+  if (status === 429) {
+    return new SpeechProviderError("ElevenLabs credits are exhausted or the rate limit was hit. Read-aloud will work again once quota is available.", status);
+  }
+  if (status === 422) {
+    return new SpeechProviderError(`ElevenLabs rejected the request (${body.slice(0, 120)})`, status);
+  }
+  return new SpeechProviderError(`ElevenLabs could not generate audio (HTTP ${status}).`, status);
 }
 
 interface GenerateOptions extends Omit<ElevenLabsSpeechRequest, "model" | "modulation"> {
@@ -186,6 +205,6 @@ export async function generateElevenLabsSpeech({
   }
 
   const audio = Buffer.from(await response.arrayBuffer());
-  if (!audio.byteLength) throw new Error("ElevenLabs returned no audio");
+  if (!audio.byteLength) throw new SpeechProviderError("ElevenLabs returned no audio.", 200);
   return audio;
 }

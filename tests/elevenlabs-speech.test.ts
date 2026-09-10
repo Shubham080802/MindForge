@@ -9,6 +9,7 @@ import {
   generateElevenLabsSpeech,
   getElevenLabsConfig,
   resolveVoiceModulation,
+  SpeechProviderError,
 } from "@/lib/elevenlabs-speech";
 import { resolveSpeechProvider, speechCacheScheme, speechContentType } from "@/lib/speech-provider";
 
@@ -155,9 +156,17 @@ describe("generateElevenLabsSpeech", () => {
   });
 
   it("explains a rejected key and an exhausted quota differently", async () => {
-    expect(elevenLabsFailure(401, "").message).toMatch(/API key/);
-    expect(elevenLabsFailure(429, "").message).toMatch(/quota or rate limit/);
-    expect(elevenLabsFailure(500, "").message).toMatch(/failed \(500\)/);
+    expect(elevenLabsFailure(401, "").message).toMatch(/API key was rejected/);
+    expect(elevenLabsFailure(429, "").message).toMatch(/credits are exhausted/);
+    expect(elevenLabsFailure(500, "").message).toMatch(/HTTP 500/);
+  });
+
+  it("marks provider failures as safe to show, carrying no credential", () => {
+    const failure = elevenLabsFailure(401, "");
+
+    expect(failure).toBeInstanceOf(SpeechProviderError);
+    expect(failure.providerStatus).toBe(401);
+    expect(failure.message).not.toMatch(/sk_|xi-api-key|Bearer/);
   });
 });
 

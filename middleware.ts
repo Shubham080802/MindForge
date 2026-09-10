@@ -24,6 +24,10 @@ export default clerkMiddleware(async (auth, req: NextRequest) => {
       "base-uri": ["'self'"],
       "frame-ancestors": ["'none'"],
       "object-src": ["'none'"],
+      // Clerk's own sign-in card paints an inline data: SVG texture, which the
+      // default img-src blocked on every visit to the primary conversion page.
+      // data: images cannot execute, and object-src stays 'none'.
+      "img-src": ["'self'", "https://img.clerk.com", "data:"],
     },
   },
 });

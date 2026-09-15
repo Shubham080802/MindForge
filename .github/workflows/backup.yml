@@ -37,6 +37,12 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    # Secrets cannot be read in a step's `if`, so their presence is surfaced
+    # here. Until the pipeline is armed the job reports itself as skipped
+    # rather than failing every night: a backup alarm that is always red gets
+    # ignored, and then it is ignored on the night it matters.
+    env:
+      BACKUP_ARMED: ${{ secrets.BACKUP_DATABASE_URL != '' }}
     services:
       verify:
         image: postgres:${{ vars.SUPABASE_PG_MAJOR || '17' }}-alpine
@@ -51,9 +57,20 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
+      - name: Report that backups are not armed
+        if: env.BACKUP_ARMED != 'true'
+        run: |
+          echo "::notice title=Backups not armed::No BACKUP_DATABASE_URL secret is configured, so no backup was taken. Follow ops/BACKUP_RECOVERY.md to arm the pipeline."
+          {
+            echo '### Backups are not armed'
+            echo 'No backup was taken. Follow `ops/BACKUP_RECOVERY.md` to add the repository secrets.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/checkout@v4
+        if: env.BACKUP_ARMED == 'true'
 
       - name: Install backup tooling
+        if: env.BACKUP_ARMED == 'true'
         env:
           PG_MAJOR: ${{ vars.SUPABASE_PG_MAJOR || '17' }}
         run: |
@@ -71,6 +88,7 @@ jobs:
           aws --version
 
       - name: Back up, verify, encrypt, and upload
+        if: env.BACKUP_ARMED == 'true'
         env:
           BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
           BACKUP_VERIFY_URL: postgresql://verify:verify@127.0.0.1:55433/verify
@@ -87,6 +105,7 @@ jobs:
       # The receipt names the artifact and its checksum but carries no secret
       # and no learner data, so it is safe in the run log of a public repo.
       - name: Publish the backup receipt
+        if: env.BACKUP_ARMED == 'true'
         run: |
           {
             echo '### Backup receipt'
@@ -97,7 +116,7 @@ jobs:
 
       # A backup that fails silently is worse than no backup at all.
       - name: Report failure to the on-call address
-        if: failure()
+        if: failure() && env.BACKUP_ARMED == 'true'
         env:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}

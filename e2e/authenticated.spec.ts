@@ -23,6 +23,15 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await expect(workspaceLanguagePicker).toHaveValue("hi");
   await workspaceLanguagePicker.selectOption("en");
 
+  // With no material attached, a short errand is refused locally and
+  // deterministically, before any request reaches the server.
+  await page.getByLabel("Your Question / Topic").fill("How is the weather today?");
+  const refuseButton = page.getByRole("button", { name: "Analyze & Start Session" });
+  await expect(refuseButton).toBeEnabled({ timeout: 5_000 });
+  await refuseButton.click();
+  await expect(page.getByRole("alert").filter({ hasText: /MindForge is a study-only workspace/ })).toBeVisible();
+  await expect(page).toHaveURL(/\/workspace$/);
+
   await page.getByLabel("Your Question / Topic").fill("Explain this short biology note");
   await page.getByLabel("Attach Files (Optional)").setInputFiles(studySource);
 
@@ -48,11 +57,9 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await expect(languagePicker).toHaveValue("hi");
   await languagePicker.selectOption("en");
 
-  const chatInput = page.getByPlaceholder(/Ask Professor MindForge/);
-  await chatInput.fill("How is the weather today?");
-  await chatInput.press("Enter");
-  await expect(page.getByText(/MindForge is a study-only workspace/)).toBeVisible();
-  await expect(page.getByText("How is the weather today?", { exact: true })).toHaveCount(0);
+  // Inside a session with material, requests are judged by the model against
+  // that material rather than by keywords, so a refusal here depends on the
+  // provider. The deterministic refusal is covered on the new-session form.
 
   await page.getByRole("button", { name: "New Session" }).click();
   await expect(page).toHaveURL(/\/workspace$/);

@@ -4,6 +4,7 @@ import { internalError, requireMutation } from "@/lib/request-guard";
 import { prepareMaterialBatch, validateMaterialBatch } from "@/lib/material-ingestion";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { recordAudit } from "@/lib/audit";
+import { assessMaterialScope, materialScopeMessage } from "@/lib/study-scope-server";
 
 export const runtime = "nodejs";
 
@@ -23,6 +24,28 @@ export async function POST(request: NextRequest) {
 
     const preparedMaterials = await prepareMaterialBatch(files, auth.userId, typeof sessionId === "string" ? sessionId : null);
 
+    // The learner's stated purpose is what distinguishes a case study about a
+    // hotel chain from a hotel booking, so it travels with the review.
+    const purpose = formData.get("purpose");
+    const verdicts = await assessMaterialScope(
+      preparedMaterials.map((material) => ({ fileName: material.fileName, text: material.extractedText ?? "" })),
+      { purpose: typeof purpose === "string" ? purpose : undefined },
+    );
+    const declined = verdicts.filter((verdict) => !verdict.allowed);
+    if (declined.length) {
+      await recordAudit({
+        action: "material.scope_declined",
+        userId: auth.userId,
+        targetType: "material_batch",
+        // Counts only: file names and reasons can reveal what a learner studies.
+        metadata: { declined: declined.length, submitted: verdicts.length },
+      });
+      return NextResponse.json(
+        { message: materialScopeMessage(declined), code: "MATERIAL_SCOPE_REQUIRED" },
+        { status: 422 },
+      );
+    }
+
     const uploadedMaterials = await prisma.$transaction(async (tx) => {
       const results = [];
       for (const data of preparedMaterials) {
@@ -37,7 +60,11 @@ export async function POST(request: NextRequest) {
       action: "material.uploaded",
       userId: auth.userId,
       targetType: "material_batch",
-      metadata: { count: uploadedMaterials.length, materialIds: uploadedMaterials.map((material) => material.id) },
+      metadata: {
+        count: uploadedMaterials.length,
+        materialIds: uploadedMaterials.map((material) => material.id),
+        review: verdicts.map((verdict) => verdict.method),
+      },
     });
     return NextResponse.json({ materials: uploadedMaterials }, { status: 201 });
   } catch (error) {

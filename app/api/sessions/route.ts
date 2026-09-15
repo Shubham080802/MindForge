@@ -15,23 +15,27 @@ export async function POST(request: NextRequest) {
 
     const { title, initialQuery, materialIds } = await parseJson(request, sessionCreateInput);
 
+    const attached = materialIds?.length
+      ? await prisma.material.findMany({
+        where: { id: { in: materialIds }, userId: auth.userId, sessionId: null },
+        select: { id: true, extractedText: true },
+      })
+      : [];
+    if (materialIds?.length && attached.length !== materialIds.length) {
+      return NextResponse.json({ message: "One or more materials are unavailable." }, { status: 400 });
+    }
+
     if (initialQuery) {
       await enforceRateLimit(request, "ai", auth.userId);
-      const scope = await enforceStudyScope(initialQuery);
+      // Judged against the documents it is about, not in isolation.
+      const scope = await enforceStudyScope(initialQuery, {
+        materials: attached.map((material) => material.extractedText),
+      });
       if (!scope.allowed) {
         return NextResponse.json(
           { message: scope.message, code: "STUDY_SCOPE_REQUIRED" },
           { status: "unavailable" in scope ? 503 : 422 },
         );
-      }
-    }
-
-    if (materialIds?.length) {
-      const available = await prisma.material.count({
-        where: { id: { in: materialIds }, userId: auth.userId, sessionId: null },
-      });
-      if (available !== materialIds.length) {
-        return NextResponse.json({ message: "One or more materials are unavailable." }, { status: 400 });
       }
     }
     const newSession = await prisma.$transaction(async (tx) => {

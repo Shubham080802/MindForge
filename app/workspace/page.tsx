@@ -17,6 +17,9 @@ import { useStudyLanguage } from "@/hooks/use-study-language";
 import { getStudyLanguage } from "@/lib/study-languages";
 import { evaluateStudyScope } from "@/lib/study-scope";
 
+/** An upload declined by the study-material review; shown inline, not as an alert. */
+class MaterialScopeError extends Error {}
+
 export default function WorkspacePage() {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -81,6 +84,8 @@ export default function WorkspacePage() {
 
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
+    // Lets the reviewer see that, say, a price list is being studied, not used.
+    formData.append("purpose", query);
 
     setUploadProgress({});
     files.forEach((file) => setUploadProgress((prev) => ({ ...prev, [file.name]: 0 })));
@@ -91,7 +96,8 @@ export default function WorkspacePage() {
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = await response.json().catch(() => ({}));
+      if (error.code === "MATERIAL_SCOPE_REQUIRED") throw new MaterialScopeError(error.message);
       throw new Error(error.message || "Upload failed");
     }
 
@@ -102,7 +108,8 @@ export default function WorkspacePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() && files.length === 0) return;
-    const scope = evaluateStudyScope(query);
+    // With files attached, the server judges the request against them instead.
+    const scope = evaluateStudyScope(query, { hasMaterials: files.length > 0 });
     if (!scope.allowed) {
       setScopeNotice(scope.message);
       queryInputRef.current?.focus();
@@ -144,6 +151,11 @@ export default function WorkspacePage() {
       router.push(`/workspace/${session.id}`);
       router.refresh();
     } catch (error) {
+      if (error instanceof MaterialScopeError) {
+        setScopeNotice(error.message);
+        queryInputRef.current?.focus();
+        return;
+      }
       console.error("Submit error:", error);
       alert(error instanceof Error ? error.message : "Failed to start session");
     } finally {
@@ -315,7 +327,7 @@ export default function WorkspacePage() {
           )}
         </Button>
         <p className="text-center text-xs leading-relaxed text-muted-foreground">
-          AI requests send your prompt and relevant extracted material to Gemini&apos;s free tier,
+          AI requests, and the suitability check on uploads, send your prompt and relevant extracted material to Gemini&apos;s free tier,
           where Google may use submitted content to improve its products. See the Privacy Policy
           before submitting sensitive material.
         </p>

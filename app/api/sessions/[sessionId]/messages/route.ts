@@ -38,7 +38,9 @@ export async function POST(
     if (!sessionData) {
       return NextResponse.json({ message: "Session not found" }, { status: 404 });
     }
-    const scope = await enforceStudyScope(content);
+    const scope = await enforceStudyScope(content, {
+      materials: sessionData.materials.map((material) => material.extractedText),
+    });
     if (!scope.allowed) {
       return NextResponse.json(
         { message: scope.message, code: "STUDY_SCOPE_REQUIRED" },

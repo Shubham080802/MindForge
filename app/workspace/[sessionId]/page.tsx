@@ -204,7 +204,8 @@ export default function SessionPage() {
   const submitMessage = async (rawContent: string, clearComposer = false) => {
     const content = rawContent.trim();
     if (!content || isLoading) return;
-    const scope = evaluateStudyScope(content);
+    // A session with material is judged against that material on the server.
+    const scope = evaluateStudyScope(content, { hasMaterials: Boolean(session?.materials?.length) });
     if (!scope.allowed) {
       setChatNotice(scope.message);
       textareaRef.current?.focus();

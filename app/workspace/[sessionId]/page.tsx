@@ -38,6 +38,7 @@ import {
   type TranslationResult,
 } from "@/lib/study-tools";
 import type { PracticeQuestionRecord, PracticeRoundRecord, StudyArtifactRecord } from "@/lib/learning-record";
+import { calculateLearningProgress } from "@/lib/learning-progress";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -508,11 +509,29 @@ export default function SessionPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const answeredPracticeQuestions = practiceRounds.reduce(
-    (total, round) => total + round.questions.filter((question) => question.response).length,
-    0,
-  );
-  const correctPracticeAnswers = practiceRounds.reduce((total, round) => total + round.score, 0);
+  const learningProgress = calculateLearningProgress({ artifacts: learningArtifacts, rounds: practiceRounds });
+
+  const followLearningRecommendation = () => {
+    const recommendation = learningProgress.recommendation;
+    if (recommendation.kind === "resume") {
+      const activeRound = practiceRounds.find((round) => !round.completedAt);
+      if (activeRound) setPracticeSession(toPracticeSession(activeRound));
+      setActiveTab("chat");
+      return;
+    }
+    if (recommendation.kind === "summary") {
+      void generateStudyTool("summary");
+      return;
+    }
+    if (recommendation.kind === "practice") {
+      void generateStudyTool("quiz");
+      return;
+    }
+
+    setInput(`Professor, help me review ${recommendation.concept}. Start with the misconception my practice answer may reveal, explain it using my materials, and then ask me one short check-for-understanding question.`);
+    setActiveTab("chat");
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
 
   if (!session) {
     return (
@@ -767,19 +786,42 @@ export default function SessionPage() {
                       <p className="text-xs text-muted-foreground">Saved notes</p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-2xl font-semibold">{practiceRounds.filter((round) => round.completedAt).length}</p>
+                      <p className="text-2xl font-semibold">{learningProgress.completedRounds}</p>
                       <p className="text-xs text-muted-foreground">Rounds finished</p>
                     </div>
                     <div className="rounded-lg bg-muted/50 p-3">
-                      <p className="text-2xl font-semibold">{answeredPracticeQuestions ? `${correctPracticeAnswers}/${answeredPracticeQuestions}` : "—"}</p>
+                      <p className="text-2xl font-semibold">{learningProgress.attempted ? `${learningProgress.correct}/${learningProgress.attempted}` : "—"}</p>
                       <p className="text-xs text-muted-foreground">Correct answers</p>
                     </div>
                   </div>
-                  {practiceSession && practiceSession.currentIndex < practiceSession.questions.length && (
-                    <Button className="mt-4 w-full" variant="outline" onClick={() => setActiveTab("chat")}>
-                      Resume question {practiceSession.currentIndex + 1} of {practiceSession.questions.length}
+                  <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">Recommended next</p>
+                    <p className="mt-1 font-medium">{learningProgress.recommendation.label}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{learningProgress.recommendation.detail}</p>
+                    <Button className="mt-3" variant="outline" onClick={followLearningRecommendation} disabled={isGenerating}>
+                      Continue learning
                       <ArrowRight className="ml-2 h-4 w-4" />
                     </Button>
+                  </div>
+                  {learningProgress.mastery.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-medium">Concept mastery</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {learningProgress.mastery.slice(0, 6).map((concept) => (
+                          <span
+                            key={concept.concept}
+                            className={cn(
+                              "rounded-full border px-2.5 py-1 text-xs",
+                              concept.status === "strong" && "border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-300",
+                              concept.status === "growing" && "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                              concept.status === "review" && "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300",
+                            )}
+                          >
+                            {concept.concept} · {Math.round(concept.accuracy * 100)}%
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   )}
                   {learningRecordNotice && <p className="mt-3 text-sm text-amber-700 dark:text-amber-300" role="status">{learningRecordNotice}</p>}
                 </CardContent>

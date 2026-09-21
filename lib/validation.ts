@@ -23,6 +23,11 @@ export const studyToolInput = z.object({
   targetLanguage: z.enum(STUDY_LANGUAGE_CODES).optional(),
 });
 
+export const practiceAnswerInput = z.object({
+  questionId: z.string().cuid(),
+  answer: z.string().trim().min(1).max(4_000),
+});
+
 /**
  * Export accepts client-held study-tool results, so it needs the same bounded
  * parsing as every other mutation rather than a raw `request.json()`.

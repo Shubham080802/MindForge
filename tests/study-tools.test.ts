@@ -5,6 +5,8 @@ import {
   type QuizQuestion,
 } from "@/lib/study-tools";
 import { parseStudyToolResult } from "@/lib/study-tool-result-schema";
+import { toPracticeRoundRecord } from "@/lib/learning-record";
+import { practiceAnswerInput } from "@/lib/validation";
 
 const multipleChoice: QuizQuestion = {
   question: "Which organelle produces ATP?",
@@ -47,5 +49,50 @@ describe("study tool results", () => {
     expect(buildStudyToolFollowUp("concepts", {
       concepts: [{ term: "ATP", definition: "Energy carrier", importance: "high", relatedTerms: [] }],
     })).toContain("ATP");
+  });
+
+  it("keeps unanswered practice keys private and reveals answered keys", () => {
+    const round = toPracticeRoundRecord({
+      id: "round-1",
+      language: "en",
+      currentIndex: 1,
+      completedAt: null,
+      createdAt: new Date("2026-09-20T00:00:00.000Z"),
+      questions: [
+        {
+          id: "answered",
+          position: 0,
+          type: "multiple_choice",
+          prompt: multipleChoice.question,
+          options: multipleChoice.options,
+          correctAnswer: multipleChoice.correctAnswer,
+          explanation: multipleChoice.explanation,
+          difficulty: multipleChoice.difficulty,
+          concept: "Cellular energy",
+          response: { answer: "Mitochondrion", verdict: "correct" },
+        },
+        {
+          id: "unanswered",
+          position: 1,
+          type: "short_answer",
+          prompt: "Describe oxidative phosphorylation.",
+          options: [],
+          correctAnswer: "ATP production using an electron transport chain",
+          explanation: "The chain creates the gradient used by ATP synthase.",
+          difficulty: "medium",
+          concept: "Oxidative phosphorylation",
+          response: null,
+        },
+      ],
+    });
+
+    expect(round.questions[0]!.correctAnswer).toBe("B");
+    expect(round.questions[1]!.correctAnswer).toBeUndefined();
+    expect(round.score).toBe(1);
+  });
+
+  it("bounds persisted practice answers", () => {
+    expect(practiceAnswerInput.safeParse({ questionId: "bad", answer: "ATP" }).success).toBe(false);
+    expect(practiceAnswerInput.safeParse({ questionId: "cm12345678901234567890123", answer: "" }).success).toBe(false);
   });
 });

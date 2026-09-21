@@ -25,6 +25,7 @@ export interface QuizQuestion {
   correctAnswer: string;
   explanation: string;
   difficulty: "easy" | "medium" | "hard";
+  concept?: string;
 }
 
 export interface QuizResult {

@@ -26,6 +26,7 @@ const quizQuestionSchema = z.object({
   correctAnswer: nonEmptyText,
   explanation: nonEmptyText,
   difficulty: z.enum(["easy", "medium", "hard"]).default("medium"),
+  concept: z.string().trim().min(1).max(120).optional(),
 });
 
 const quizResultSchema = z.object({

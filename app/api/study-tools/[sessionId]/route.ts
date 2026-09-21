@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import OpenAI from "openai";
 import { getAIChatModel, getAIClient } from "@/lib/ai-client";
-import { internalError, parseJson, requireMutation } from "@/lib/request-guard";
+import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib/request-guard";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { studyToolInput } from "@/lib/validation";
 import { getStudyLanguage } from "@/lib/study-languages";
 import { parseStudyToolResult } from "@/lib/study-tool-result-schema";
+import { loadLearningRecord, persistStudyToolResult } from "@/lib/learning-record";
+import { recordAudit } from "@/lib/audit";
 
 export const runtime = "nodejs";
 
@@ -22,8 +24,8 @@ Format as JSON with: { "title": "...", "summary": "...", "keyPoints": [...], "de
   concepts: `Extract key concepts, terms, and definitions from the study materials. 
 Format as JSON with: { "concepts": [{ "term": "...", "definition": "...", "importance": "high|medium|low", "relatedTerms": [...] }] }`,
 
-  quiz: `Generate exactly 6 practice questions from the study materials for an interactive tutoring session. Mix multiple-choice, true/false, and short-answer questions when the material supports them. Multiple-choice questions must include 3 or 4 complete answer options. Keep each explanation short and encouraging.
-Format as JSON with: { "questions": [{ "question": "...", "type": "multiple_choice|true_false|short_answer", "options": [...], "correctAnswer": "...", "explanation": "...", "difficulty": "easy|medium|hard" }] }`,
+  quiz: `Generate exactly 6 practice questions from the study materials for an interactive tutoring session. Mix multiple-choice, true/false, and short-answer questions when the material supports them. Multiple-choice questions must include 3 or 4 complete answer options. Keep each explanation short and encouraging. Name the primary concept assessed by each question.
+Format as JSON with: { "questions": [{ "question": "...", "type": "multiple_choice|true_false|short_answer", "options": [...], "correctAnswer": "...", "explanation": "...", "difficulty": "easy|medium|hard", "concept": "..." }] }`,
 
   translate: `Translate the provided content to the target language. Preserve formatting and technical terms.
 Format as JSON with: { "translatedContent": "..." }`,
@@ -34,6 +36,22 @@ function buildContextFromMaterials(materials: Array<{ extractedText: string | nu
     .filter((m) => m.extractedText && m.extractedText.length > 0)
     .map((m, i) => `--- Material ${i + 1} (${m.url.split("/").pop() || "Document"}) ---\n${m.extractedText?.slice(0, 4000)}`)
     .join("\n\n");
+}
+
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ sessionId: string }> },
+) {
+  try {
+    const auth = await requireAppUser();
+    if ("error" in auth) return auth.error;
+    const { sessionId } = await params;
+    const record = await loadLearningRecord(auth.userId, sessionId);
+    if (!record) return NextResponse.json({ message: "Session not found" }, { status: 404 });
+    return NextResponse.json(record);
+  } catch (error) {
+    return internalError("Get learning record", error);
+  }
 }
 
 export async function POST(
@@ -98,7 +116,17 @@ export async function POST(
       return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
     }
 
-    return NextResponse.json({ result: parsedResult, language: targetLanguage || "en" });
+    const language = targetLanguage || "en";
+    const persisted = await persistStudyToolResult(sessionId, tool, language, parsedResult);
+    await recordAudit({
+      action: tool === "quiz" ? "practice.started" : "study_artifact.created",
+      userId: auth.userId,
+      targetType: tool === "quiz" ? "practice_round" : "study_artifact",
+      targetId: persisted.kind === "round" ? persisted.round.id : persisted.artifact.id,
+      metadata: { tool, language },
+    });
+
+    return NextResponse.json({ result: parsedResult, language, ...persisted });
   } catch (error) {
     return internalError("Study tool", error);
   }

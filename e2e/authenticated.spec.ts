@@ -108,11 +108,14 @@ test("authenticated learner completes the full study journey and leaves cleanly"
 
   // Study tools must generate from the session's own materials.
   await page.getByRole("tab", { name: "Study Tools" }).click();
-  await page.getByRole("button", { name: "Generate", exact: true }).click();
+  await page.getByRole("button", { name: "Create summary", exact: true }).click();
   await expect(page.getByRole("button", { name: "Close study tool result" })).toBeVisible({ timeout: 120_000 });
+  await page.getByRole("button", { name: "Continue in chat" }).click();
+  await expect(page.getByPlaceholder(/Ask Professor MindForge/)).toHaveValue(/discuss the generated summary/i);
 
   // Export must produce a real file, not just a request.
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await page.getByRole("tab", { name: "Study Tools" }).click();
+  await page.getByRole("button", { name: "Choose export", exact: true }).click();
   const download = page.waitForEvent("download");
   await page.getByRole("button", { name: /Markdown/ }).click();
   const markdown = await (await download).createReadStream();

@@ -11,7 +11,8 @@ Studying from a pile of PDFs, lecture notes, slides, and screenshots often means
 ## What it does
 
 - Ingests PDFs, DOCX files, plain text, Markdown, and OCR-enabled images.
-- Creates source-grounded summaries, concepts, flashcards, quizzes, study plans, translations, and multilingual audio explanations.
+- Creates readable summaries, key concepts, and multilingual notes that can continue naturally into the professor chat.
+- Runs one-question-at-a-time practice in chat with multiple choice, true/false, short answers, immediate feedback, and scoring.
 - Provides account-scoped sessions, search, source downloads, profile preferences, and JSON, Markdown, and PDF exports.
 
 ## How we built it

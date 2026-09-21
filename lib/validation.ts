@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { STUDY_LANGUAGE_CODES } from "@/lib/study-languages";
+import { STUDY_TOOL_NAMES } from "@/lib/study-tools";
 
 export const sessionCreateInput = z.object({
   title: z.string().trim().min(1).max(120),
@@ -18,7 +19,7 @@ export const profileUpdateInput = z.object({
 }).refine((input) => input.name !== undefined || input.language !== undefined, { message: "No fields to update" });
 
 export const studyToolInput = z.object({
-  tool: z.enum(["summary", "concepts", "quiz", "translate"]),
+  tool: z.enum(STUDY_TOOL_NAMES),
   targetLanguage: z.enum(STUDY_LANGUAGE_CODES).optional(),
 });
 

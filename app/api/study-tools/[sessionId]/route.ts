@@ -6,6 +6,7 @@ import { internalError, parseJson, requireMutation } from "@/lib/request-guard";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { studyToolInput } from "@/lib/validation";
 import { getStudyLanguage } from "@/lib/study-languages";
+import { parseStudyToolResult } from "@/lib/study-tool-result-schema";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,7 @@ Format as JSON with: { "title": "...", "summary": "...", "keyPoints": [...], "de
   concepts: `Extract key concepts, terms, and definitions from the study materials. 
 Format as JSON with: { "concepts": [{ "term": "...", "definition": "...", "importance": "high|medium|low", "relatedTerms": [...] }] }`,
 
-  quiz: `Generate practice quiz questions from the study materials.
+  quiz: `Generate exactly 6 practice questions from the study materials for an interactive tutoring session. Mix multiple-choice, true/false, and short-answer questions when the material supports them. Multiple-choice questions must include 3 or 4 complete answer options. Keep each explanation short and encouraging.
 Format as JSON with: { "questions": [{ "question": "...", "type": "multiple_choice|true_false|short_answer", "options": [...], "correctAnswer": "...", "explanation": "...", "difficulty": "easy|medium|hard" }] }`,
 
   translate: `Translate the provided content to the target language. Preserve formatting and technical terms.
@@ -66,9 +67,10 @@ export async function POST(
 
     let systemPrompt = STUDY_TOOL_PROMPTS[tool as keyof typeof STUDY_TOOL_PROMPTS];
     
-    if (tool === "translate") {
-      systemPrompt += `\nTarget language: ${getStudyLanguage(targetLanguage).name}`;
-    }
+    const responseLanguage = getStudyLanguage(targetLanguage || "en");
+    systemPrompt += tool === "translate"
+      ? `\nTarget language: ${responseLanguage.name}`
+      : `\nWrite all learner-facing content in ${responseLanguage.name}. Preserve technical terms when accuracy requires it.`;
 
     const messages = [
       { role: "system" as const, content: systemPrompt },
@@ -91,12 +93,12 @@ export async function POST(
 
     let parsedResult;
     try {
-      parsedResult = JSON.parse(result);
+      parsedResult = parseStudyToolResult(tool, JSON.parse(result));
     } catch {
       return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
     }
 
-    return NextResponse.json({ result: parsedResult, language: tool === "translate" ? (targetLanguage || "en") : null });
+    return NextResponse.json({ result: parsedResult, language: targetLanguage || "en" });
   } catch (error) {
     return internalError("Study tool", error);
   }

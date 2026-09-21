@@ -3,12 +3,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from "@/components/ui/separator";
-import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Eye, FileSearch, GraduationCap, ShieldCheck } from "lucide-react";
+import { Loader2, Send, FileText, Image as LucideImage, Mic, Volume2, VolumeX, Copy, Download, Trash2, Edit, FileDown, MessageSquare, Sparkles, BookOpen, Brain, Languages, Settings, ChevronLeft, ChevronRight, X, User as LucideUser, Eye, FileSearch, GraduationCap, ShieldCheck, CheckCircle2, XCircle, Trophy, ArrowRight, RotateCcw } from "lucide-react";
 import { UserDropdown } from "@/components/ui/user-dropdown";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
 import { PDFViewerDialog } from "./pdf-viewer-dialog";
@@ -24,6 +25,21 @@ import { evaluateStudyScope } from "@/lib/study-scope";
 import { shouldSubmitComposer } from "@/lib/chat-composer";
 import { getSpeechAudioUrl, playNativeAudio } from "@/lib/browser-audio";
 import { prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
+import {
+  buildPracticeDiscussionPrompt,
+  buildStudyToolFollowUp,
+  evaluatePracticeAnswer,
+  studyToolLabel,
+  type ConceptResult,
+  type ExportableStudyToolName,
+  type PracticeAnswerEvaluation,
+  type QuizQuestion,
+  type QuizResult,
+  type StudyToolName,
+  type StudyToolResult,
+  type SummaryResult,
+  type TranslationResult,
+} from "@/lib/study-tools";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -63,6 +79,21 @@ interface SessionData {
   _count: { messages: number; materials: number };
 }
 
+interface StudyToolResultState {
+  tool: ExportableStudyToolName;
+  resultKey: string;
+  result: StudyToolResult;
+  language: StudyLanguageCode;
+}
+
+interface PracticeSession {
+  questions: QuizQuestion[];
+  currentIndex: number;
+  answer: string;
+  feedback: PracticeAnswerEvaluation | null;
+  score: number;
+}
+
 export default function SessionPage() {
   const params = useParams();
   const router = useRouter();
@@ -80,7 +111,8 @@ export default function SessionPage() {
   const [chatNotice, setChatNotice] = useState<string | null>(null);
   const { language: explanationLanguage, updateLanguage, isLoading: isLoadingLanguage, isSaving: isSavingLanguage, error: languageError } = useStudyLanguage();
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
-  const [studyToolResult, setStudyToolResult] = useState<{ tool: string; result: any; language?: StudyLanguageCode } | null>(null);
+  const [studyToolResult, setStudyToolResult] = useState<StudyToolResultState | null>(null);
+  const [practiceSession, setPracticeSession] = useState<PracticeSession | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [exportFormat, setExportFormat] = useState<"markdown" | "json" | "pdf" | null>(null);
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
@@ -100,7 +132,7 @@ export default function SessionPage() {
     useSessionShortcuts(textareaRef, () => sendMessage({ preventDefault: () => {} } as React.FormEvent), () => speakLastMessage(), () => router.push("/workspace"))
   );
 
-  const generateStudyTool = async (tool: string) => {
+  const generateStudyTool = async (tool: StudyToolName) => {
     setIsGenerating(true);
     setStudyToolResult(null);
 
@@ -109,7 +141,7 @@ export default function SessionPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ tool, targetLanguage: tool === "translate" ? explanationLanguage : undefined }),
+        body: JSON.stringify({ tool, targetLanguage: explanationLanguage }),
       });
 
       if (!res.ok) {
@@ -117,9 +149,17 @@ export default function SessionPage() {
         throw new Error(errorData.message || "Failed to generate");
       }
 
-      const data = await res.json();
+      const data = await res.json() as { result: StudyToolResult; language: StudyLanguageCode };
+      if (tool === "quiz") {
+        const quiz = data.result as QuizResult;
+        setPracticeSession({ questions: quiz.questions, currentIndex: 0, answer: "", feedback: null, score: 0 });
+        setActiveTab("chat");
+        setChatNotice(null);
+        return;
+      }
+
       const resultKey = tool === "translate" ? `translate-${explanationLanguage}` : tool;
-      setStudyToolResult({ tool, result: data.result, language: data.language });
+      setStudyToolResult({ tool, resultKey, result: data.result, language: data.language });
       setStoredToolResults((prev) => ({ ...prev, [resultKey]: data.result }));
     } catch (error) {
       console.error("Study tool error:", error);
@@ -127,6 +167,40 @@ export default function SessionPage() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const continueStudyToolInChat = (toolResult: StudyToolResultState) => {
+    setInput(buildStudyToolFollowUp(toolResult.tool, toolResult.result));
+    setActiveTab("chat");
+    requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  const checkPracticeAnswer = () => {
+    setPracticeSession((current) => {
+      if (!current || current.feedback || !current.answer.trim()) return current;
+      const question = current.questions[current.currentIndex];
+      if (!question) return current;
+      const feedback = evaluatePracticeAnswer(question, current.answer);
+      return {
+        ...current,
+        feedback,
+        score: current.score + (feedback.verdict === "correct" ? 1 : 0),
+      };
+    });
+  };
+
+  const advancePractice = () => {
+    setPracticeSession((current) => current ? {
+      ...current,
+      currentIndex: current.currentIndex + 1,
+      answer: "",
+      feedback: null,
+    } : null);
+  };
+
+  const discussPracticeQuestion = (question: QuizQuestion, answer: string) => {
+    setInput(buildPracticeDiscussionPrompt(question, answer));
+    requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   const handleExport = async (format: "markdown" | "json" | "pdf", toolName?: string) => {
@@ -515,6 +589,18 @@ export default function SessionPage() {
                     )}
                   </>
                 )}
+                {practiceSession && (
+                  <PracticeCoach
+                    session={practiceSession}
+                    languageName={getStudyLanguage(explanationLanguage).name}
+                    onAnswerChange={(answer) => setPracticeSession((current) => current ? { ...current, answer } : null)}
+                    onCheck={checkPracticeAnswer}
+                    onNext={advancePractice}
+                    onDiscuss={discussPracticeQuestion}
+                    onRestart={() => setPracticeSession((current) => current ? { ...current, currentIndex: 0, answer: "", feedback: null, score: 0 } : null)}
+                    onClose={() => setPracticeSession(null)}
+                  />
+                )}
                 <div ref={messagesEndRef} />
               </ScrollArea>
 
@@ -590,45 +676,62 @@ export default function SessionPage() {
           {/* Study Tools Tab */}
           {activeTab === "study" && (
             <div className="flex-1 p-4 overflow-y-auto space-y-6">
-              <StudyToolCard
-                icon={<Brain className="h-6 w-6" />}
-                title="Generate Summary"
-                description="Create a concise summary of all your materials"
-                action="Generate"
-                onClick={() => generateStudyTool("summary")}
-                disabled={isGenerating}
-              />
-              <StudyToolCard
-                icon={<BookOpen className="h-6 w-6" />}
-                title="Key Concepts"
-                description="Extract important terms, definitions, and concepts"
-                action="Extract"
-                onClick={() => generateStudyTool("concepts")}
-                disabled={isGenerating}
-              />
-              <StudyToolCard
-                icon={<MessageSquare className="h-6 w-6" />}
-                title="Practice Questions"
-                description="Generate quiz questions to test your understanding"
-                action="Create Quiz"
-                onClick={() => generateStudyTool("quiz")}
-                disabled={isGenerating}
-              />
-              <StudyToolCard
-                icon={<Languages className="h-6 w-6" />}
-                title="Multilingual Explanation"
-                description={`Explain your material in ${getStudyLanguage(explanationLanguage).name}`}
-                action={`Explain in ${getStudyLanguage(explanationLanguage).name}`}
-                onClick={() => generateStudyTool("translate")}
-                disabled={isGenerating}
-              />
-              <StudyToolCard
-                icon={<FileDown className="h-6 w-6" />}
-                title="Export Notes"
-                description="Download chat history and notes as PDF, Markdown, or JSON"
-                action="Export"
-                onClick={() => setExportFormat("markdown")}
-              />
+              <StudyToolSection
+                title="Learn & discuss"
+                description="Create a useful study note, then bring it into your conversation with Professor MindForge."
+              >
+                <StudyToolCard
+                  icon={<Brain className="h-6 w-6" />}
+                  title="Generate Summary"
+                  description="Turn the material into a readable overview you can discuss or save"
+                  action="Create summary"
+                  onClick={() => generateStudyTool("summary")}
+                  disabled={isGenerating}
+                />
+                <StudyToolCard
+                  icon={<BookOpen className="h-6 w-6" />}
+                  title="Key Concepts"
+                  description="Extract important terms and explore how they connect in chat"
+                  action="Find concepts"
+                  onClick={() => generateStudyTool("concepts")}
+                  disabled={isGenerating}
+                />
+                <StudyToolCard
+                  icon={<Languages className="h-6 w-6" />}
+                  title="Multilingual Explanation"
+                  description={`Create a teaching note in ${getStudyLanguage(explanationLanguage).name}`}
+                  action={`Explain in ${getStudyLanguage(explanationLanguage).name}`}
+                  onClick={() => generateStudyTool("translate")}
+                  disabled={isGenerating}
+                />
+              </StudyToolSection>
+
+              <StudyToolSection
+                title="Practice in chat"
+                description="Professor MindForge asks one question at a time and gives immediate feedback."
+              >
+                <StudyToolCard
+                  icon={<MessageSquare className="h-6 w-6" />}
+                  title="Interactive Practice"
+                  description="Mix multiple-choice, true/false, and short-answer questions from your materials"
+                  action={practiceSession ? "Start a new round" : "Start practice"}
+                  onClick={() => generateStudyTool("quiz")}
+                  disabled={isGenerating}
+                />
+              </StudyToolSection>
+
+              <StudyToolSection
+                title="Export & keep"
+                description="Download only when you want a lasting copy. Markdown is best for editable notes; PDF is best for sharing."
+              >
+                <StudyToolCard
+                  icon={<FileDown className="h-6 w-6" />}
+                  title="Export Learning Record"
+                  description="Choose chat history, generated notes, and a deliberate download format"
+                  action="Choose export"
+                  onClick={() => setExportFormat("markdown")}
+                />
+              </StudyToolSection>
               {isGenerating && (
                 <div className="flex items-center justify-center gap-2 rounded-lg border bg-muted/40 p-6 text-muted-foreground" role="status">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -636,68 +739,47 @@ export default function SessionPage() {
                 </div>
               )}
               {studyToolResult && (
-                <div className="rounded-lg border bg-muted/50 p-4">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <h3 className="font-semibold capitalize">
-                      {studyToolResult.tool === "translate" && studyToolResult.language
-                        ? `${getStudyLanguage(studyToolResult.language).name} Explanation`
-                        : `${studyToolResult.tool} Result`}
-                    </h3>
-                    <div className="flex items-center gap-2">
-                      <Button variant="ghost" size="sm" onClick={() => handleExport("pdf", studyToolResult.tool)} disabled={exportProgress.active}>
-                        <FileText className="h-4 w-4" />
-                        <span className="hidden sm:inline">PDF</span>
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleExport("markdown", studyToolResult.tool)} disabled={exportProgress.active}>
-                        <FileDown className="h-4 w-4" />
-                        <span className="hidden sm:inline">MD</span>
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleExport("json", studyToolResult.tool)} disabled={exportProgress.active}>
-                        <FileText className="h-4 w-4" />
-                        <span className="hidden sm:inline">JSON</span>
-                      </Button>
-                      <Button variant="ghost" size="sm" aria-label="Close study tool result" onClick={() => setStudyToolResult(null)} disabled={exportProgress.active}>
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="prose prose-sm max-w-none">
-                    <pre className="whitespace-pre-wrap rounded bg-muted p-4 font-mono text-sm">{JSON.stringify(studyToolResult.result, null, 2)}</pre>
-                  </div>
-                </div>
+                <StudyToolResultPanel
+                  toolResult={studyToolResult}
+                  exporting={exportProgress.active}
+                  onUseInChat={() => continueStudyToolInChat(studyToolResult)}
+                  onExport={(format) => handleExport(format, studyToolResult.resultKey)}
+                  onClose={() => setStudyToolResult(null)}
+                />
               )}
               {exportFormat && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setExportFormat(null)}>
-                  <div className="bg-card rounded-lg p-4 w-full max-w-sm shadow-lg" onClick={(e) => e.stopPropagation()}>
-                    <h3 className="font-semibold mb-4">Choose Export Format</h3>
+                  <div className="bg-card rounded-lg p-5 w-full max-w-md shadow-lg" onClick={(e) => e.stopPropagation()}>
+                    <div className="mb-4">
+                      <h3 className="font-semibold">Export learning record</h3>
+                      <p className="mt-1 text-sm text-muted-foreground">The full export includes your conversation and any generated learning notes.</p>
+                    </div>
                     <div className="space-y-2">
-                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("json")} disabled={exportProgress.active}>
-                        <FileText className="mr-2 h-4 w-4" />
-                        JSON
+                      <Button className="w-full justify-between" onClick={() => handleExport("markdown")} disabled={exportProgress.active}>
+                        <span className="flex items-center"><FileDown className="mr-2 h-4 w-4" />Markdown</span>
+                        <span className="text-xs opacity-80">Recommended · editable</span>
                       </Button>
-                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("markdown")} disabled={exportProgress.active}>
-                        <FileDown className="mr-2 h-4 w-4" />
-                        Markdown
+                      <Button className="w-full justify-between" variant="outline" onClick={() => handleExport("pdf")} disabled={exportProgress.active}>
+                        <span className="flex items-center"><FileText className="mr-2 h-4 w-4" />PDF</span>
+                        <span className="text-xs text-muted-foreground">Best for sharing</span>
                       </Button>
-                      <Button className="w-full justify-start" variant="outline" onClick={() => handleExport("pdf")} disabled={exportProgress.active}>
-                        <FileText className="mr-2 h-4 w-4" />
-                        PDF
+                      <Button className="w-full justify-between" variant="outline" onClick={() => handleExport("json")} disabled={exportProgress.active}>
+                        <span className="flex items-center"><FileText className="mr-2 h-4 w-4" />JSON</span>
+                        <span className="text-xs text-muted-foreground">Structured data</span>
                       </Button>
                     </div>
                     {Object.keys(storedToolResults).length > 0 && (
                       <div className="mt-4 border-t pt-4">
-                        <h4 className="text-sm font-medium mb-2">Export Individual Tool</h4>
-                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                        <h4 className="text-sm font-medium mb-2">Individual learning notes</h4>
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
                           {Object.entries(storedToolResults).map(([tool]) => (
-                            <Button
-                              key={tool}
-                              className="w-full justify-start text-xs"
-                              variant="ghost"
-                              onClick={() => handleExport("pdf", tool)}
-                              disabled={exportProgress.active}
-                            >
-                              {tool.charAt(0).toUpperCase() + tool.slice(1)} (PDF)
-                            </Button>
+                            <div key={tool} className="flex items-center justify-between gap-2 rounded-md bg-muted/50 p-2">
+                              <span className="text-sm">{studyToolLabel(tool)}</span>
+                              <div className="flex gap-1">
+                                <Button size="sm" variant="ghost" onClick={() => handleExport("markdown", tool)} disabled={exportProgress.active}>MD</Button>
+                                <Button size="sm" variant="ghost" onClick={() => handleExport("pdf", tool)} disabled={exportProgress.active}>PDF</Button>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       </div>
@@ -846,11 +928,232 @@ function MaterialCard({ material, detailed = false, onClick }: { material: Mater
   );
 }
 
+function StudyToolSection({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
+  return (
+    <section aria-labelledby={`study-${title.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+      <div className="mb-3">
+        <h2 id={`study-${title.toLowerCase().replace(/[^a-z]+/g, "-")}`} className="text-lg font-semibold">{title}</h2>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <div className="space-y-3">{children}</div>
+    </section>
+  );
+}
+
+function StudyToolResultPanel({
+  toolResult,
+  exporting,
+  onUseInChat,
+  onExport,
+  onClose,
+}: {
+  toolResult: StudyToolResultState;
+  exporting: boolean;
+  onUseInChat: () => void;
+  onExport: (format: "markdown" | "pdf") => void;
+  onClose: () => void;
+}) {
+  return (
+    <section className="rounded-xl border bg-card p-5 shadow-sm" aria-label={`${studyToolLabel(toolResult.tool)} result`}>
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Ready to learn</p>
+          <h3 className="text-lg font-semibold">
+            {toolResult.tool === "translate"
+              ? `${getStudyLanguage(toolResult.language).name} explanation`
+              : studyToolLabel(toolResult.tool)}
+          </h3>
+        </div>
+        <Button variant="ghost" size="icon" aria-label="Close study tool result" onClick={onClose} disabled={exporting}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      {toolResult.tool === "summary" && <SummaryView result={toolResult.result as SummaryResult} />}
+      {toolResult.tool === "concepts" && <ConceptsView result={toolResult.result as ConceptResult} />}
+      {toolResult.tool === "translate" && <TranslationView result={toolResult.result as TranslationResult} />}
+
+      <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
+        <Button onClick={onUseInChat}>
+          <MessageSquare className="mr-2 h-4 w-4" />
+          Continue in chat
+        </Button>
+        <Button variant="outline" onClick={() => onExport("markdown")} disabled={exporting}>
+          <FileDown className="mr-2 h-4 w-4" />
+          Save Markdown
+        </Button>
+        <Button variant="ghost" onClick={() => onExport("pdf")} disabled={exporting}>
+          <FileText className="mr-2 h-4 w-4" />
+          Save PDF
+        </Button>
+      </div>
+    </section>
+  );
+}
+
+function SummaryView({ result }: { result: SummaryResult }) {
+  return (
+    <div className="space-y-5 text-sm">
+      <div>
+        <h4 className="font-semibold">{result.title}</h4>
+        <p className="mt-2 whitespace-pre-wrap leading-6 text-muted-foreground">{result.summary}</p>
+      </div>
+      <div>
+        <h4 className="font-medium">Key points</h4>
+        <ul className="mt-2 space-y-2">
+          {result.keyPoints.map((point, index) => (
+            <li key={`${point}-${index}`} className="flex gap-2"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-primary" />{point}</li>
+          ))}
+        </ul>
+      </div>
+      {Object.keys(result.definitions).length > 0 && (
+        <div>
+          <h4 className="font-medium">Definitions</h4>
+          <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+            {Object.entries(result.definitions).map(([term, definition]) => (
+              <div key={term} className="rounded-lg bg-muted/60 p-3"><dt className="font-medium">{term}</dt><dd className="mt-1 text-muted-foreground">{definition}</dd></div>
+            ))}
+          </dl>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConceptsView({ result }: { result: ConceptResult }) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {result.concepts.map((concept) => (
+        <article key={concept.term} className="rounded-lg border bg-muted/30 p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="font-semibold">{concept.term}</h4>
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs capitalize text-primary">{concept.importance}</span>
+          </div>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">{concept.definition}</p>
+          {concept.relatedTerms.length > 0 && <p className="mt-3 text-xs text-muted-foreground">Related: {concept.relatedTerms.join(", ")}</p>}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function TranslationView({ result }: { result: TranslationResult }) {
+  return <div className="rounded-lg bg-muted/40 p-4 text-sm leading-7 whitespace-pre-wrap">{result.translatedContent}</div>;
+}
+
+function PracticeCoach({
+  session,
+  languageName,
+  onAnswerChange,
+  onCheck,
+  onNext,
+  onDiscuss,
+  onRestart,
+  onClose,
+}: {
+  session: PracticeSession;
+  languageName: string;
+  onAnswerChange: (answer: string) => void;
+  onCheck: () => void;
+  onNext: () => void;
+  onDiscuss: (question: QuizQuestion, answer: string) => void;
+  onRestart: () => void;
+  onClose: () => void;
+}) {
+  const question = session.questions[session.currentIndex];
+  if (!question) {
+    return (
+      <div className="mx-auto my-4 w-full max-w-2xl rounded-2xl border border-primary/30 bg-primary/5 p-6 text-center" role="status">
+        <Trophy className="mx-auto h-10 w-10 text-primary" />
+        <h3 className="mt-3 text-xl font-semibold">Practice complete</h3>
+        <p className="mt-1 text-muted-foreground">You scored {session.score} out of {session.questions.length}. Short answers marked for review are learning opportunities, not failures.</p>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <Button onClick={onRestart}><RotateCcw className="mr-2 h-4 w-4" />Practice again</Button>
+          <Button variant="outline" onClick={onClose}>Finish</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const choices = question.type === "true_false"
+    ? (question.options.length ? question.options : ["True", "False"])
+    : question.options;
+  const isLast = session.currentIndex === session.questions.length - 1;
+
+  return (
+    <section className="mx-auto my-4 w-full max-w-2xl rounded-2xl border border-primary/30 bg-card p-5 shadow-sm" aria-label="Interactive practice">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-primary">Professor practice · {languageName}</p>
+          <p className="mt-1 text-sm text-muted-foreground">Question {session.currentIndex + 1} of {session.questions.length} · <span className="capitalize">{question.difficulty}</span></p>
+        </div>
+        <Button variant="ghost" size="icon" aria-label="End practice" onClick={onClose}><X className="h-4 w-4" /></Button>
+      </div>
+
+      <h3 className="mt-4 text-lg font-semibold leading-7">{question.question}</h3>
+
+      {question.type === "short_answer" ? (
+        <Input
+          className="mt-4"
+          aria-label="Your practice answer"
+          placeholder="Write your answer…"
+          value={session.answer}
+          onChange={(event) => onAnswerChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && session.answer.trim() && !session.feedback) onCheck();
+          }}
+          disabled={Boolean(session.feedback)}
+        />
+      ) : (
+        <div className="mt-4 grid gap-2">
+          {choices.map((choice, index) => (
+            <Button
+              key={`${choice}-${index}`}
+              type="button"
+              variant={session.answer === choice ? "default" : "outline"}
+              className="h-auto min-h-11 justify-start whitespace-normal py-2 text-left"
+              onClick={() => onAnswerChange(choice)}
+              disabled={Boolean(session.feedback)}
+            >
+              {question.type === "multiple_choice" && <span className="mr-2 font-semibold">{String.fromCharCode(65 + index)}.</span>}
+              {choice}
+            </Button>
+          ))}
+        </div>
+      )}
+
+      {!session.feedback ? (
+        <Button className="mt-4" onClick={onCheck} disabled={!session.answer.trim()}>
+          Check answer
+        </Button>
+      ) : (
+        <div className="mt-4 space-y-4">
+          <div className={cn(
+            "rounded-lg border p-4",
+            session.feedback.verdict === "correct" ? "border-green-500/40 bg-green-500/10" : session.feedback.verdict === "incorrect" ? "border-red-500/40 bg-red-500/10" : "border-amber-500/40 bg-amber-500/10",
+          )} role="status">
+            <div className="flex items-center gap-2 font-semibold">
+              {session.feedback.verdict === "correct" ? <CheckCircle2 className="h-5 w-5 text-green-600" /> : session.feedback.verdict === "incorrect" ? <XCircle className="h-5 w-5 text-red-600" /> : <BookOpen className="h-5 w-5 text-amber-600" />}
+              {session.feedback.verdict === "correct" ? "Exactly right" : session.feedback.verdict === "incorrect" ? "Not quite yet" : "Compare and learn"}
+            </div>
+            {session.feedback.verdict !== "correct" && <p className="mt-2 text-sm"><span className="font-medium">Expected answer:</span> {session.feedback.expectedAnswer}</p>}
+            <p className="mt-2 text-sm leading-6 text-muted-foreground">{question.explanation}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={onNext}>{isLast ? "See my result" : "Next question"}<ArrowRight className="ml-2 h-4 w-4" /></Button>
+            <Button variant="outline" onClick={() => onDiscuss(question, session.answer)}><MessageSquare className="mr-2 h-4 w-4" />Ask professor</Button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StudyToolCard({ icon, title, description, action, onClick, disabled = false }: { icon: React.ReactNode; title: string; description: string; action: string; onClick: () => void; disabled?: boolean }) {
   return (
     <Card>
       <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary">
               {icon}
@@ -860,7 +1163,7 @@ function StudyToolCard({ icon, title, description, action, onClick, disabled = f
               <p className="text-sm text-muted-foreground">{description}</p>
             </div>
           </div>
-          <Button onClick={onClick} disabled={disabled}>{action}</Button>
+          <Button className="sm:shrink-0" onClick={onClick} disabled={disabled}>{action}</Button>
         </div>
       </CardContent>
     </Card>

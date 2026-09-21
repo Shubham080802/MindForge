@@ -149,6 +149,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: "Session not found" }, { status: 404 });
     }
 
+    if (toolName && (!toolResults || !Object.prototype.hasOwnProperty.call(toolResults, toolName))) {
+      return NextResponse.json({ message: "Study note not found" }, { status: 400 });
+    }
+    const includedToolResults = toolName && toolResults
+      ? { [toolName]: toolResults[toolName] }
+      : (toolResults || {});
+
     const filename = `mindforge-${sessionData.title.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
 
     if (format === "json") {
@@ -168,7 +175,7 @@ export async function POST(request: NextRequest) {
           content: m.content,
           createdAt: m.createdAt,
         })),
-        toolResults: toolResults || {},
+        toolResults: includedToolResults,
         exportedAt: new Date().toISOString(),
       };
       return new NextResponse(JSON.stringify(exportData, null, 2), {
@@ -200,9 +207,9 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      if (toolResults) {
+      if (Object.keys(includedToolResults).length > 0) {
         md += "## Study Tools Results\n\n";
-        Object.entries(toolResults).forEach(([tool, result]) => {
+        Object.entries(includedToolResults).forEach(([tool, result]) => {
           md += `### ${tool.charAt(0).toUpperCase() + tool.slice(1)}\n`;
           if (typeof result === "object") {
             md += "```json\n" + JSON.stringify(result, null, 2) + "\n```\n\n";
@@ -227,7 +234,7 @@ export async function POST(request: NextRequest) {
         sessionData.title,
         ...sessionData.materials.map((material) => material.fileName),
         ...sessionData.messages.map((message) => message.content),
-        JSON.stringify(toolResults ?? {}),
+        JSON.stringify(includedToolResults),
       ]);
       if (!support.supported) {
         return NextResponse.json(
@@ -236,15 +243,14 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (toolName && toolResults && toolResults[toolName]) {
+      if (toolName) {
         // Export single tool result
-        const singleToolResults: Record<string, any> = { [toolName]: toolResults[toolName] };
         const pdfBytes = await generatePdf(
           `${sessionData.title} - ${toolName}`,
           sessionData.createdAt.toISOString(),
           [],
           [],
-          singleToolResults
+          includedToolResults
         );
         return new NextResponse(Buffer.from(pdfBytes), {
           headers: {
@@ -259,7 +265,7 @@ export async function POST(request: NextRequest) {
         sessionData.createdAt.toISOString(),
         sessionData.materials,
         sessionData.messages.map(m => ({ role: m.role, content: m.content, createdAt: m.createdAt.toISOString() })),
-        toolResults || {}
+        includedToolResults
       );
 
       return new NextResponse(Buffer.from(pdfBytes), {

@@ -47,14 +47,16 @@ model Account {
 }
 
 model Session {
-  id        String     @id @default(cuid())
-  userId    String
-  title     String
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages  Message[]
-  materials Material[]
+  id             String          @id @default(cuid())
+  userId         String
+  title          String
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages       Message[]
+  materials      Material[]
+  studyArtifacts StudyArtifact[]
+  practiceRounds PracticeRound[]
 }
 
 model Message {
@@ -132,4 +134,62 @@ model AuditEvent {
   @@index([userId, createdAt])
   @@index([action, createdAt])
   @@index([createdAt])
+}
+
+model StudyArtifact {
+  id        String   @id @default(cuid())
+  sessionId String
+  kind      String
+  language  String   @default("en")
+  content   Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+  @@index([sessionId, kind, language])
+}
+
+model PracticeRound {
+  id           String             @id @default(cuid())
+  sessionId    String
+  language     String             @default("en")
+  currentIndex Int                @default(0)
+  completedAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  session      Session            @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  questions    PracticeQuestion[]
+
+  @@index([sessionId, createdAt])
+  @@index([sessionId, completedAt])
+}
+
+model PracticeQuestion {
+  id            String            @id @default(cuid())
+  roundId       String
+  position      Int
+  type          String
+  prompt        String            @db.Text
+  options       Json
+  correctAnswer String            @db.Text
+  explanation   String            @db.Text
+  difficulty    String
+  concept       String?
+  round         PracticeRound     @relation(fields: [roundId], references: [id], onDelete: Cascade)
+  response      PracticeResponse?
+
+  @@unique([roundId, position])
+  @@index([roundId])
+}
+
+model PracticeResponse {
+  id         String           @id @default(cuid())
+  questionId String           @unique
+  answer     String           @db.Text
+  verdict    String
+  createdAt  DateTime         @default(now())
+  question   PracticeQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@index([verdict])
 }

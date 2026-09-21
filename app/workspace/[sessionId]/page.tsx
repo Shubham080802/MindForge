@@ -28,18 +28,16 @@ import { prepareSpeechText, splitSpeechText } from "@/lib/speech-text";
 import {
   buildPracticeDiscussionPrompt,
   buildStudyToolFollowUp,
-  evaluatePracticeAnswer,
   studyToolLabel,
   type ConceptResult,
   type ExportableStudyToolName,
   type PracticeAnswerEvaluation,
-  type QuizQuestion,
-  type QuizResult,
   type StudyToolName,
   type StudyToolResult,
   type SummaryResult,
   type TranslationResult,
 } from "@/lib/study-tools";
+import type { PracticeQuestionRecord, PracticeRoundRecord, StudyArtifactRecord } from "@/lib/learning-record";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -87,11 +85,32 @@ interface StudyToolResultState {
 }
 
 interface PracticeSession {
-  questions: QuizQuestion[];
+  roundId: string;
+  questions: PracticeQuestionRecord[];
   currentIndex: number;
   answer: string;
   feedback: PracticeAnswerEvaluation | null;
   score: number;
+  nextIndex: number;
+  isChecking: boolean;
+}
+
+interface LearningRecord {
+  artifacts: StudyArtifactRecord[];
+  rounds: PracticeRoundRecord[];
+}
+
+function toPracticeSession(round: PracticeRoundRecord): PracticeSession {
+  return {
+    roundId: round.id,
+    questions: round.questions,
+    currentIndex: round.currentIndex,
+    answer: "",
+    feedback: null,
+    score: round.score,
+    nextIndex: round.currentIndex,
+    isChecking: false,
+  };
 }
 
 export default function SessionPage() {
@@ -113,6 +132,9 @@ export default function SessionPage() {
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
   const [studyToolResult, setStudyToolResult] = useState<StudyToolResultState | null>(null);
   const [practiceSession, setPracticeSession] = useState<PracticeSession | null>(null);
+  const [learningArtifacts, setLearningArtifacts] = useState<StudyArtifactRecord[]>([]);
+  const [practiceRounds, setPracticeRounds] = useState<PracticeRoundRecord[]>([]);
+  const [learningRecordNotice, setLearningRecordNotice] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [exportFormat, setExportFormat] = useState<"markdown" | "json" | "pdf" | null>(null);
   const [storedToolResults, setStoredToolResults] = useState<Record<string, any>>({});
@@ -149,18 +171,24 @@ export default function SessionPage() {
         throw new Error(errorData.message || "Failed to generate");
       }
 
-      const data = await res.json() as { result: StudyToolResult; language: StudyLanguageCode };
+      const data = await res.json() as (
+        { kind: "round"; round: PracticeRoundRecord; language: StudyLanguageCode }
+        | { kind: "artifact"; artifact: StudyArtifactRecord; result: StudyToolResult; language: StudyLanguageCode }
+      );
       if (tool === "quiz") {
-        const quiz = data.result as QuizResult;
-        setPracticeSession({ questions: quiz.questions, currentIndex: 0, answer: "", feedback: null, score: 0 });
+        if (data.kind !== "round") throw new Error("Practice round was not created");
+        setPracticeSession(toPracticeSession(data.round));
+        setPracticeRounds((current) => [data.round, ...current.filter((round) => round.id !== data.round.id)]);
         setActiveTab("chat");
         setChatNotice(null);
         return;
       }
 
+      if (data.kind !== "artifact") throw new Error("Learning note was not saved");
       const resultKey = tool === "translate" ? `translate-${explanationLanguage}` : tool;
       setStudyToolResult({ tool, resultKey, result: data.result, language: data.language });
       setStoredToolResults((prev) => ({ ...prev, [resultKey]: data.result }));
+      setLearningArtifacts((current) => [data.artifact, ...current.filter((artifact) => artifact.id !== data.artifact.id)]);
     } catch (error) {
       console.error("Study tool error:", error);
       alert(error instanceof Error ? error.message : "Failed to generate study tool");
@@ -175,30 +203,49 @@ export default function SessionPage() {
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
-  const checkPracticeAnswer = () => {
-    setPracticeSession((current) => {
-      if (!current || current.feedback || !current.answer.trim()) return current;
-      const question = current.questions[current.currentIndex];
-      if (!question) return current;
-      const feedback = evaluatePracticeAnswer(question, current.answer);
-      return {
-        ...current,
-        feedback,
-        score: current.score + (feedback.verdict === "correct" ? 1 : 0),
-      };
-    });
+  const checkPracticeAnswer = async () => {
+    const current = practiceSession;
+    const question = current?.questions[current.currentIndex];
+    if (!current || !question || current.feedback || current.isChecking || !current.answer.trim()) return;
+
+    setPracticeSession({ ...current, isChecking: true });
+    try {
+      const res = await fetch(`/api/study-tools/${sessionId}/practice/${current.roundId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ questionId: question.id, answer: current.answer }),
+      });
+      if (!res.ok) {
+        const failure = await res.json().catch(() => ({ message: "Could not save this answer" }));
+        throw new Error(failure.message || "Could not save this answer");
+      }
+      const data = await res.json() as { evaluation: PracticeAnswerEvaluation; round: PracticeRoundRecord };
+      setPracticeSession((latest) => latest && latest.roundId === data.round.id ? {
+        ...latest,
+        questions: data.round.questions,
+        feedback: data.evaluation,
+        score: data.round.score,
+        nextIndex: data.round.currentIndex,
+        isChecking: false,
+      } : latest);
+      setPracticeRounds((rounds) => [data.round, ...rounds.filter((round) => round.id !== data.round.id)]);
+    } catch (error) {
+      setPracticeSession((latest) => latest ? { ...latest, isChecking: false } : latest);
+      setChatNotice(error instanceof Error ? error.message : "Could not save this answer");
+    }
   };
 
   const advancePractice = () => {
     setPracticeSession((current) => current ? {
       ...current,
-      currentIndex: current.currentIndex + 1,
+      currentIndex: current.nextIndex,
       answer: "",
       feedback: null,
     } : null);
   };
 
-  const discussPracticeQuestion = (question: QuizQuestion, answer: string) => {
+  const discussPracticeQuestion = (question: PracticeQuestionRecord, answer: string) => {
     setInput(buildPracticeDiscussionPrompt(question, answer));
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
@@ -264,9 +311,36 @@ export default function SessionPage() {
     }
   }, [sessionId, router]);
 
+  const fetchLearningRecord = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/study-tools/${sessionId}`, { credentials: "include" });
+      if (!res.ok) {
+        const failure = await res.json().catch(() => ({ message: "Saved learning work is unavailable" }));
+        throw new Error(failure.message || "Saved learning work is unavailable");
+      }
+      const record = await res.json() as LearningRecord;
+      setLearningArtifacts(record.artifacts);
+      setPracticeRounds(record.rounds);
+      setStoredToolResults(() => {
+        const results: Record<string, StudyToolResult> = {};
+        for (const artifact of record.artifacts) {
+          const key = artifact.kind === "translate" ? `translate-${artifact.language}` : artifact.kind;
+          if (!(key in results)) results[key] = artifact.content;
+        }
+        return results;
+      });
+      const activeRound = record.rounds.find((round) => !round.completedAt);
+      setPracticeSession((current) => current ?? (activeRound ? toPracticeSession(activeRound) : null));
+      setLearningRecordNotice(null);
+    } catch (error) {
+      setLearningRecordNotice(error instanceof Error ? error.message : "Saved learning work is unavailable");
+    }
+  }, [sessionId]);
+
   useEffect(() => {
     fetchSession();
-  }, [fetchSession]);
+    void fetchLearningRecord();
+  }, [fetchSession, fetchLearningRecord]);
 
   const speakLastMessage = () => {
     const lastAssistantMessage = [...messages].reverse().find((m) => m.role === "assistant");
@@ -434,6 +508,12 @@ export default function SessionPage() {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
+  const answeredPracticeQuestions = practiceRounds.reduce(
+    (total, round) => total + round.questions.filter((question) => question.response).length,
+    0,
+  );
+  const correctPracticeAnswers = practiceRounds.reduce((total, round) => total + round.score, 0);
+
   if (!session) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -597,7 +677,7 @@ export default function SessionPage() {
                     onCheck={checkPracticeAnswer}
                     onNext={advancePractice}
                     onDiscuss={discussPracticeQuestion}
-                    onRestart={() => setPracticeSession((current) => current ? { ...current, currentIndex: 0, answer: "", feedback: null, score: 0 } : null)}
+                    onRestart={() => void generateStudyTool("quiz")}
                     onClose={() => setPracticeSession(null)}
                   />
                 )}
@@ -676,6 +756,35 @@ export default function SessionPage() {
           {/* Study Tools Tab */}
           {activeTab === "study" && (
             <div className="flex-1 p-4 overflow-y-auto space-y-6">
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Your learning record</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-3 text-center">
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-2xl font-semibold">{learningArtifacts.length}</p>
+                      <p className="text-xs text-muted-foreground">Saved notes</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-2xl font-semibold">{practiceRounds.filter((round) => round.completedAt).length}</p>
+                      <p className="text-xs text-muted-foreground">Rounds finished</p>
+                    </div>
+                    <div className="rounded-lg bg-muted/50 p-3">
+                      <p className="text-2xl font-semibold">{answeredPracticeQuestions ? `${correctPracticeAnswers}/${answeredPracticeQuestions}` : "—"}</p>
+                      <p className="text-xs text-muted-foreground">Correct answers</p>
+                    </div>
+                  </div>
+                  {practiceSession && practiceSession.currentIndex < practiceSession.questions.length && (
+                    <Button className="mt-4 w-full" variant="outline" onClick={() => setActiveTab("chat")}>
+                      Resume question {practiceSession.currentIndex + 1} of {practiceSession.questions.length}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  )}
+                  {learningRecordNotice && <p className="mt-3 text-sm text-amber-700 dark:text-amber-300" role="status">{learningRecordNotice}</p>}
+                </CardContent>
+              </Card>
+
               <StudyToolSection
                 title="Learn & discuss"
                 description="Create a useful study note, then bring it into your conversation with Professor MindForge."
@@ -746,6 +855,38 @@ export default function SessionPage() {
                   onExport={(format) => handleExport(format, studyToolResult.resultKey)}
                   onClose={() => setStudyToolResult(null)}
                 />
+              )}
+              {learningArtifacts.length > 0 && (
+                <section aria-labelledby="saved-learning-notes">
+                  <div className="mb-3">
+                    <h2 id="saved-learning-notes" className="font-semibold">Saved learning notes</h2>
+                    <p className="text-sm text-muted-foreground">Reopen a summary, concept guide, or multilingual explanation after any refresh.</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {learningArtifacts.slice(0, 8).map((artifact) => {
+                      const resultKey = artifact.kind === "translate" ? `translate-${artifact.language}` : artifact.kind;
+                      return (
+                        <button
+                          key={artifact.id}
+                          type="button"
+                          className="rounded-lg border bg-card p-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          onClick={() => setStudyToolResult({
+                            tool: artifact.kind,
+                            resultKey,
+                            result: artifact.content,
+                            language: artifact.language as StudyLanguageCode,
+                          })}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-medium">{studyToolLabel(artifact.kind)}</span>
+                            <span className="text-xs uppercase text-muted-foreground">{artifact.language}</span>
+                          </div>
+                          <p className="mt-2 text-xs text-muted-foreground">Saved {formatDistanceToNow(new Date(artifact.createdAt), { addSuffix: true })}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
               )}
               {exportFormat && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setExportFormat(null)}>
@@ -1056,7 +1197,7 @@ function PracticeCoach({
   onAnswerChange: (answer: string) => void;
   onCheck: () => void;
   onNext: () => void;
-  onDiscuss: (question: QuizQuestion, answer: string) => void;
+  onDiscuss: (question: PracticeQuestionRecord, answer: string) => void;
   onRestart: () => void;
   onClose: () => void;
 }) {
@@ -1100,9 +1241,9 @@ function PracticeCoach({
           value={session.answer}
           onChange={(event) => onAnswerChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && session.answer.trim() && !session.feedback) onCheck();
+            if (event.key === "Enter" && session.answer.trim() && !session.feedback && !session.isChecking) onCheck();
           }}
-          disabled={Boolean(session.feedback)}
+          disabled={Boolean(session.feedback) || session.isChecking}
         />
       ) : (
         <div className="mt-4 grid gap-2">
@@ -1113,7 +1254,7 @@ function PracticeCoach({
               variant={session.answer === choice ? "default" : "outline"}
               className="h-auto min-h-11 justify-start whitespace-normal py-2 text-left"
               onClick={() => onAnswerChange(choice)}
-              disabled={Boolean(session.feedback)}
+              disabled={Boolean(session.feedback) || session.isChecking}
             >
               {question.type === "multiple_choice" && <span className="mr-2 font-semibold">{String.fromCharCode(65 + index)}.</span>}
               {choice}
@@ -1123,8 +1264,9 @@ function PracticeCoach({
       )}
 
       {!session.feedback ? (
-        <Button className="mt-4" onClick={onCheck} disabled={!session.answer.trim()}>
-          Check answer
+        <Button className="mt-4" onClick={onCheck} disabled={!session.answer.trim() || session.isChecking}>
+          {session.isChecking && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {session.isChecking ? "Saving answer…" : "Check answer"}
         </Button>
       ) : (
         <div className="mt-4 space-y-4">

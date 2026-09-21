@@ -99,6 +99,6 @@ export function buildStudyToolFollowUp(tool: ExportableStudyToolName, result: St
   return "Professor, continue teaching from the multilingual explanation I just generated. Clarify the most important idea and then ask me one check-for-understanding question.";
 }
 
-export function buildPracticeDiscussionPrompt(question: QuizQuestion, answer: string) {
+export function buildPracticeDiscussionPrompt(question: Pick<QuizQuestion, "question">, answer: string) {
   return `Professor, help me understand this practice question without simply repeating the answer.\n\nQuestion: ${question.question}\nMy answer: ${answer || "I was unsure"}`;
 }

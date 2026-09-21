@@ -9,6 +9,7 @@ import { getStudyLanguage } from "@/lib/study-languages";
 import { parseStudyToolResult } from "@/lib/study-tool-result-schema";
 import { loadLearningRecord, persistStudyToolResult } from "@/lib/learning-record";
 import { recordAudit } from "@/lib/audit";
+import { ZodError } from "zod";
 
 export const runtime = "nodejs";
 
@@ -109,10 +110,43 @@ export async function POST(
       return NextResponse.json({ message: "Failed to generate result" }, { status: 500 });
     }
 
+    let providerResult: unknown;
+    try {
+      providerResult = JSON.parse(result);
+    } catch (error) {
+      console.error("[DEBUG-study-tool-parse]", {
+        tool,
+        stage: "json",
+        length: result.length,
+        firstCharacter: result.trim().charAt(0),
+        error: error instanceof Error ? error.name : "unknown",
+      });
+      return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
+    }
+
     let parsedResult;
     try {
-      parsedResult = parseStudyToolResult(tool, JSON.parse(result));
-    } catch {
+      parsedResult = parseStudyToolResult(tool, providerResult);
+    } catch (error) {
+      const value = providerResult && typeof providerResult === "object" ? providerResult as Record<string, unknown> : null;
+      const questions = Array.isArray(value?.questions) ? value.questions : [];
+      console.error("[DEBUG-study-tool-parse]", {
+        tool,
+        stage: "schema",
+        topLevelKeys: value ? Object.keys(value) : [],
+        questionCount: questions.length,
+        questionShapes: questions.slice(0, 10).map((question) => {
+          const item = question && typeof question === "object" ? question as Record<string, unknown> : null;
+          return {
+            keys: item ? Object.keys(item) : [],
+            type: typeof item?.type === "string" ? item.type : typeof item?.type,
+            optionsKind: Array.isArray(item?.options) ? "array" : typeof item?.options,
+          };
+        }),
+        issues: error instanceof ZodError
+          ? error.issues.map((issue) => ({ code: issue.code, path: issue.path, message: issue.message }))
+          : [],
+      });
       return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
     }
 

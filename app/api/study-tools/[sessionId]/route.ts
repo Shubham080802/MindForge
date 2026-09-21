@@ -126,6 +126,11 @@ export async function POST(
       metadata: { tool, language },
     });
 
+    if (persisted.kind === "round") {
+      // Practice answer keys remain server-side until the learner submits a response.
+      return NextResponse.json({ language, ...persisted });
+    }
+
     return NextResponse.json({ result: parsedResult, language, ...persisted });
   } catch (error) {
     return internalError("Study tool", error);

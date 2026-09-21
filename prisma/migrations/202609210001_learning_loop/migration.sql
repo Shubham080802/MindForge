@@ -57,3 +57,10 @@ ALTER TABLE "StudyArtifact" ADD CONSTRAINT "StudyArtifact_sessionId_fkey" FOREIG
 ALTER TABLE "PracticeRound" ADD CONSTRAINT "PracticeRound_sessionId_fkey" FOREIGN KEY ("sessionId") REFERENCES "Session"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "PracticeQuestion" ADD CONSTRAINT "PracticeQuestion_roundId_fkey" FOREIGN KEY ("roundId") REFERENCES "PracticeRound"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "PracticeResponse" ADD CONSTRAINT "PracticeResponse_questionId_fkey" FOREIGN KEY ("questionId") REFERENCES "PracticeQuestion"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- The application reaches these tables only through authenticated server routes.
+-- Deny direct anon/authenticated Supabase API access by default.
+ALTER TABLE "StudyArtifact" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PracticeRound" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PracticeQuestion" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "PracticeResponse" ENABLE ROW LEVEL SECURITY;

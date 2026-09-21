@@ -119,7 +119,9 @@ export async function POST(
         stage: "json",
         length: result.length,
         firstCharacter: result.trim().charAt(0),
-        error: error instanceof Error ? error.name : "unknown",
+        lastCharacter: result.trim().slice(-1),
+        finishReason: completion.choices[0]?.finish_reason,
+        error: error instanceof Error ? error.message : "unknown",
       });
       return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
     }

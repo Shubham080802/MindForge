@@ -6,10 +6,9 @@ import { internalError, parseJson, requireAppUser, requireMutation } from "@/lib
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { studyToolInput } from "@/lib/validation";
 import { getStudyLanguage } from "@/lib/study-languages";
-import { parseStudyToolResult } from "@/lib/study-tool-result-schema";
+import { generateValidatedStudyToolResult } from "@/lib/study-tool-result-schema";
 import { loadLearningRecord, persistStudyToolResult } from "@/lib/learning-record";
 import { recordAudit } from "@/lib/audit";
-import { ZodError } from "zod";
 
 export const runtime = "nodejs";
 
@@ -96,60 +95,34 @@ export async function POST(
       { role: "user" as const, content: context },
     ];
 
-    const completion = await ai.chat.completions.create({
-      model: getAIChatModel(),
-      messages,
-      temperature: 0.3,
-      max_tokens: 3000,
-      response_format: { type: "json_object" },
-    });
-
-    const result = completion.choices[0]?.message?.content;
-    
-    if (!result) {
-      return NextResponse.json({ message: "Failed to generate result" }, { status: 500 });
-    }
-
-    let providerResult: unknown;
-    try {
-      providerResult = JSON.parse(result);
-    } catch (error) {
-      console.error("[DEBUG-study-tool-parse]", {
-        tool,
-        stage: "json",
-        length: result.length,
-        firstCharacter: result.trim().charAt(0),
-        lastCharacter: result.trim().slice(-1),
-        finishReason: completion.choices[0]?.finish_reason,
-        error: error instanceof Error ? error.message : "unknown",
-      });
-      return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
-    }
-
     let parsedResult;
     try {
-      parsedResult = parseStudyToolResult(tool, providerResult);
-    } catch (error) {
-      const value = providerResult && typeof providerResult === "object" ? providerResult as Record<string, unknown> : null;
-      const questions = Array.isArray(value?.questions) ? value.questions : [];
-      console.error("[DEBUG-study-tool-parse]", {
-        tool,
-        stage: "schema",
-        topLevelKeys: value ? Object.keys(value) : [],
-        questionCount: questions.length,
-        questionShapes: questions.slice(0, 10).map((question) => {
-          const item = question && typeof question === "object" ? question as Record<string, unknown> : null;
-          return {
-            keys: item ? Object.keys(item) : [],
-            type: typeof item?.type === "string" ? item.type : typeof item?.type,
-            optionsKind: Array.isArray(item?.options) ? "array" : typeof item?.options,
-          };
-        }),
-        issues: error instanceof ZodError
-          ? error.issues.map((issue) => ({ code: issue.code, path: issue.path, message: issue.message }))
-          : [],
+      parsedResult = await generateValidatedStudyToolResult(tool, async (attempt) => {
+        const completion = await ai.chat.completions.create({
+          model: getAIChatModel(),
+          messages: attempt === 0 ? messages : [
+            ...messages,
+            {
+              role: "system" as const,
+              content: tool === "quiz"
+                ? "The previous JSON was incomplete or invalid. Return complete JSON only. Generate exactly 4 concise questions and keep each explanation to one sentence."
+                : "The previous JSON was incomplete or invalid. Return a shorter, complete JSON object only.",
+            },
+          ],
+          temperature: attempt === 0 ? 0.3 : 0.1,
+          max_tokens: tool === "quiz" ? (attempt === 0 ? 5000 : 3500) : 3000,
+          response_format: { type: "json_object" },
+        });
+        const content = completion.choices[0]?.message?.content;
+        if (!content) throw new Error("AI returned an empty study tool response");
+        return content;
       });
-      return NextResponse.json({ message: "Failed to parse AI response" }, { status: 500 });
+    } catch (error) {
+      console.error("Study tool generation failed validation after retry", {
+        tool,
+        error: error instanceof Error ? error.name : "unknown",
+      });
+      return NextResponse.json({ message: "The AI response was incomplete. Please try again." }, { status: 502 });
     }
 
     const language = targetLanguage || "en";

@@ -48,3 +48,19 @@ const RESULT_SCHEMAS = {
 export function parseStudyToolResult(tool: StudyToolName, value: unknown): StudyToolResult {
   return RESULT_SCHEMAS[tool].parse(value) as StudyToolResult;
 }
+
+/** Retries a provider once when its JSON is incomplete or fails the strict result schema. */
+export async function generateValidatedStudyToolResult(
+  tool: StudyToolName,
+  generate: (attempt: number) => Promise<string>,
+): Promise<StudyToolResult> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return parseStudyToolResult(tool, JSON.parse(await generate(attempt)));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}

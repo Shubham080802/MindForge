@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   buildStudyToolFollowUp,
   evaluatePracticeAnswer,
   type QuizQuestion,
 } from "@/lib/study-tools";
 import { parseStudyToolResult } from "@/lib/study-tool-result-schema";
+import { generateValidatedStudyToolResult } from "@/lib/study-tool-result-schema";
 import { toPracticeRoundRecord } from "@/lib/learning-record";
 import { practiceAnswerInput } from "@/lib/validation";
 
@@ -94,5 +95,18 @@ describe("study tool results", () => {
   it("bounds persisted practice answers", () => {
     expect(practiceAnswerInput.safeParse({ questionId: "bad", answer: "ATP" }).success).toBe(false);
     expect(practiceAnswerInput.safeParse({ questionId: "cm12345678901234567890123", answer: "" }).success).toBe(false);
+  });
+
+  it("retries once when a provider truncates quiz JSON", async () => {
+    const attempts = [
+      '{"questions":[{"question":"Incomplete',
+      JSON.stringify({ questions: [multipleChoice] }),
+    ];
+    const generate = vi.fn(async (attempt: number) => attempts[attempt]!);
+
+    const result = await generateValidatedStudyToolResult("quiz", generate);
+
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect("questions" in result && result.questions).toHaveLength(1);
   });
 });

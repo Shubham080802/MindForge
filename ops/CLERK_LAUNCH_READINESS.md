@@ -24,6 +24,9 @@ credential values or learner data.
   password breach checking, device trust, and a ten-attempt/60-minute user
   lockout enabled. Sessions have a seven-day maximum lifetime and do not allow
   multiple simultaneous sessions.
+- Passkey sign-in and optional authenticator-app MFA with backup codes are
+  enabled on the development instance. MindForge Settings exposes Clerk's
+  account-security surface so learners can enroll and manage those factors.
 - Application routes use Clerk middleware for protected pages and APIs. API
   requests receive HTTP 401 instead of an HTML redirect, and browser-initiated
   mutations pass through the shared authenticated/same-origin request guard.
@@ -56,7 +59,7 @@ staging environment.
 Handle these independently after the production instance is healthy so a
 configuration change can be attributed and rolled back cleanly:
 
-1. Enable and test passkeys and an MFA recovery path.
+1. Exercise passkey enrollment and authenticator recovery in a real browser.
 2. Add real Terms of Service and Privacy Policy URLs before enabling Clerk's
    legal-consent requirement.
 3. Create a dedicated staging URL and configure the authenticated Playwright

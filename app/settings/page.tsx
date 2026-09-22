@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useClerk, useUser } from "@clerk/nextjs";
+import { UserProfile, useClerk, useUser } from "@clerk/nextjs";
 import { useTheme } from "next-themes";
-import { AlertCircle, ArrowLeft, CheckCircle, Loader2, Palette, Save, User } from "lucide-react";
+import { AlertCircle, ArrowLeft, CheckCircle, Loader2, Palette, Save, ShieldCheck, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -78,8 +78,9 @@ export default function SettingsPage() {
           {message && <div className={cn("my-6 flex items-center gap-2 rounded-lg border p-4", message.type === "success" ? "border-green-200 bg-green-50 text-green-800" : "border-red-200 bg-red-50 text-red-800")}>{message.type === "success" ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}<span>{message.text}</span></div>}
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-8 w-full">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
               <TabsTrigger value="profile"><User className="mr-2 h-4 w-4" />Profile</TabsTrigger>
+              <TabsTrigger value="security"><ShieldCheck className="mr-2 h-4 w-4" />Security</TabsTrigger>
               <TabsTrigger value="appearance"><Palette className="mr-2 h-4 w-4" />Appearance</TabsTrigger>
               <TabsTrigger value="danger"><AlertCircle className="mr-2 h-4 w-4 text-red-500" />Data</TabsTrigger>
             </TabsList>
@@ -90,6 +91,28 @@ export default function SettingsPage() {
                 <div className="space-y-2"><Label htmlFor="email">Email</Label><Input id="email" value={profile.email} disabled className="bg-muted" /></div>
                 <Button onClick={saveProfile} disabled={isSaving}>{isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save changes</Button>
               </CardContent></Card>
+            </TabsContent>
+
+            <TabsContent value="security" className="mt-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Sign-in and account security</CardTitle>
+                  <CardDescription>
+                    Add a passkey, configure an authenticator app, review active devices, or change your password.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="overflow-x-auto">
+                  <UserProfile
+                    routing="hash"
+                    appearance={{
+                      elements: {
+                        rootBox: "w-full",
+                        cardBox: "w-full max-w-none shadow-none",
+                      },
+                    }}
+                  />
+                </CardContent>
+              </Card>
             </TabsContent>
 
             <TabsContent value="appearance" className="mt-6">

@@ -1,6 +1,16 @@
 import { expect, test } from "@playwright/test";
 import { clerk } from "@clerk/testing/playwright";
 
+test("authenticated learner can manage sign-in security", async ({ page }) => {
+  await page.goto("/");
+  await clerk.signIn({ page, emailAddress: process.env.E2E_EMAIL! });
+
+  await page.goto("/settings");
+  await page.getByRole("tab", { name: "Security" }).click();
+  await expect(page.locator(".cl-userProfile-root")).toBeVisible();
+  await expect(page.getByText("Security", { exact: true }).last()).toBeVisible();
+});
+
 test("authenticated learner can create and manage a study session", async ({ page }) => {
   const studySource = process.env.E2E_UPLOAD_PATH || {
     name: "biology.txt",

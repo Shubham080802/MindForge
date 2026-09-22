@@ -158,6 +158,43 @@ on-call rotation is not yet possible. Vercel's configurable anomaly alerts
 require Pro with Observability Plus; see
 [Vercel Alerts](https://vercel.com/docs/alerts).
 
+### Ongoing Supabase health alert — 2026-09-21
+
+An active Codex heartbeat named `MindForge Supabase health alert` now checks the
+canonical production health endpoint every hour. It requires HTTP 200 and both
+`database` and `configuration` to report `ok`. When authenticated Supabase
+access is available, it also performs read-only inspection of project
+`lhdstoqeyubdnhoaaiok` for an unhealthy or paused project and recent database
+errors. It is explicitly prohibited from changing database, project, billing,
+permission, or application state.
+
+The first scheduled run sends a single notification labeled
+`ALERT DELIVERY TEST`, including its UTC timestamp and observed health. Later
+runs remain quiet while health is unchanged, and notify only for degradation,
+increased severity, inability to assess health, or recovery. This avoids
+repeated healthy-state noise while preserving a human-visible state-change
+channel.
+
+At `2026-09-22T02:47:17Z`, the monitored endpoint returned HTTP 200 with:
+
+```json
+{"status":"ok","checks":{"database":"ok","configuration":"ok"}}
+```
+
+This control is appropriate to the current Free plan. Supabase log drains are
+available only on Pro, Team, and Enterprise plans and carry separate hourly and
+event-volume charges; see [Log Drains](https://supabase.com/docs/guides/observability/log-drains)
+and [Log Drain usage](https://supabase.com/docs/guides/platform/manage-your-usage/log-drains).
+
+This monitor does not substitute for the backup workflow's own failure alert.
+On the same date, the GitHub repository exposed no Actions secrets or variables
+to `gh secret list` / `gh variable list`. Therefore `.github/workflows/backup.yml`
+is still unarmed: it cannot create a real Supabase backup or send its Resend
+failure email until the operator provisions every secret listed in
+`ops/BACKUP_RECOVERY.md`. The earlier protected application-alert drill proves
+the production Resend transport and inbox delivery, but it must not be cited as
+proof that a GitHub backup failure currently reaches a human.
+
 ## Exit criteria
 
 1. **Met.** Human alert delivery is proven end to end: a protected production
@@ -172,3 +209,7 @@ require Pro with Observability Plus; see
    the age identity, create the bucket, add the repository secrets, run the
    workflow once by hand, and record a drill against a real retained artifact.
    Upgrading Supabase remains the only way to obtain point-in-time recovery.
+4. **Active; first-run receipt pending.** The hourly Supabase health heartbeat
+   is active and the production health check passes. Confirm the first
+   `ALERT DELIVERY TEST` notification in Codex to close human-delivery proof for
+   this separate monitoring channel.

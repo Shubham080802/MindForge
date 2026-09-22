@@ -10,6 +10,7 @@ import { Search, Plus, FileText, MessageSquare, Calendar, ChevronRight, Filter, 
 import { cn } from "@/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { DarkModeToggle } from "@/components/ui/dark-mode-toggle";
+import { UserDropdown } from "@/components/ui/user-dropdown";
 import { useKeyboardShortcuts, useGlobalShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 interface Session {
@@ -203,15 +204,18 @@ export default function LibraryPage() {
             <span className="text-primary">Mind</span>
             <span className="text-foreground">Forge</span>
           </Link>
-          <nav className="hidden md:flex items-center gap-6">
-            <Link href="/library" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors">
-              Library
-            </Link>
-            <Link href="/workspace" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-              New Session
-            </Link>
+          <div className="flex items-center gap-3">
+            <nav className="hidden items-center gap-6 md:flex">
+              <Link href="/library" className="text-sm font-medium text-primary hover:text-primary/80 transition-colors">
+                Library
+              </Link>
+              <Link href="/workspace" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
+                New Session
+              </Link>
+            </nav>
             <DarkModeToggle />
-          </nav>
+            <UserDropdown />
+          </div>
         </div>
       </header>
 

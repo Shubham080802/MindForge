@@ -30,6 +30,8 @@ credential values or learner data.
 - Application routes use Clerk middleware for protected pages and APIs. API
   requests receive HTTP 401 instead of an HTML redirect, and browser-initiated
   mutations pass through the shared authenticated/same-origin request guard.
+- Account controls remain available from both Workspace and Library, so a
+  learner can sign out without navigating back through a study session.
 
 ## Production-instance checkpoint
 

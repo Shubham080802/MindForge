@@ -16,6 +16,9 @@ credential values or learner data.
 - Development keys were added to GitHub Actions as
   `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`. Production keys must never
   replace these testing credentials.
+- A protected GitHub `staging` environment now targets the canonical Vercel
+  deployment and contains the development Clerk credentials plus the
+  disposable end-to-end learner identity. Secret values are not recorded here.
 - [Quality run 35680811672](https://github.com/Shubham080802/MindForge/actions/runs/35680811672)
   was rerun after adding the secrets and passed every gate, including database
   migrations, unit tests, type checking, linting, production build, dependency
@@ -32,13 +35,27 @@ credential values or learner data.
   mutations pass through the shared authenticated/same-origin request guard.
 - Account controls remain available from both Workspace and Library, so a
   learner can sign out without navigating back through a study session.
+- Commit `d33c107` is deployed at
+  <https://mind-forge-ashy.vercel.app>. The live Settings security screen was
+  exercised in a real browser and exposed passkey enrollment, authenticator
+  two-step verification, backup-code recovery, password, active-device, and
+  account-deletion controls.
+- [Quality run 35684677044](https://github.com/Shubham080802/MindForge/actions/runs/35684677044)
+  passed both jobs against that commit. The general job passed dependency
+  audit, migrations, 220 unit tests, type checking, linting, production build,
+  and public Playwright tests. The protected staging job passed sign-in,
+  security-control discovery, session creation, grounded chat, study-tool use,
+  export/download, session deletion, sign-out, and protected-route rejection.
 
 ## Production-instance checkpoint
 
 The linked application does not yet have a Clerk production instance. The
-read-only `clerk deploy --mode agent` check reports `state: not_started` and
-requires Clerk's interactive production-deployment wizard. Run this from the
-repository root:
+read-only `clerk deploy --mode agent` check reports `state: not_started`. The
+interactive wizard was inspected and correctly stopped before mutation because
+it requires an operator-owned custom domain, DNS access, and production Google
+OAuth credentials. A `vercel.app` hostname is not a substitute for an owned
+domain in this cutover. Once those inputs exist, run this from the repository
+root:
 
 ```bash
 corepack pnpm dlx clerk@latest deploy
@@ -56,15 +73,19 @@ sign-out, protected-route rejection, and account deletion against the canonical
 production URL. Keep the development keys in GitHub Actions and in any future
 staging environment.
 
-## Subsequent controls
+## Remaining controls
 
-Handle these independently after the production instance is healthy so a
-configuration change can be attributed and rolled back cleanly:
+Handle these independently so a configuration change can be attributed and
+rolled back cleanly:
 
-1. Exercise passkey enrollment and authenticator recovery in a real browser.
-2. Add real Terms of Service and Privacy Policy URLs before enabling Clerk's
-   legal-consent requirement.
-3. Create a dedicated staging URL and configure the authenticated Playwright
-   job with a development-instance test user.
-4. Re-run the full authenticated learner journey and retain the GitHub Actions
-   result as launch evidence.
+1. Obtain an operator-owned MindForge domain, DNS access, and production Google
+   OAuth credentials, then create and verify the Clerk production instance.
+2. Confirm the legal operator identity, governing jurisdiction, minimum learner
+   age, and durable legal contact. Review the existing Terms and Privacy pages
+   with those details before enabling Clerk's legal-consent requirement.
+3. After production cutover, repeat the authenticated learner journey using a
+   dedicated production smoke-test identity and retain the run as evidence.
+4. Exercise an actual passkey enrollment and authenticator recovery ceremony on
+   a disposable account. The controls are present and tested for discoverability,
+   but enrolling a factor changes the human operator's account and is therefore
+   intentionally not automated.

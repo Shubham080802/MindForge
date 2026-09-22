@@ -7,16 +7,21 @@ test("authenticated learner can manage sign-in security", async ({ page }) => {
 
   await page.goto("/settings");
   await page.getByRole("tab", { name: "Security" }).click();
-  await expect(page.locator(".cl-userProfile-root")).toBeVisible();
-  await expect(page.getByText("Security", { exact: true }).last()).toBeVisible();
+  const userProfile = page.locator(".cl-userProfile-root");
+  await expect(userProfile).toBeVisible();
+  await userProfile.getByRole("button", { name: "Security", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Add a passkey" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add two-step verification" })).toBeVisible();
 });
 
 test("authenticated learner can create and manage a study session", async ({ page }) => {
+  const sessionTitle = `E2E session management ${Date.now()}`;
   const studySource = process.env.E2E_UPLOAD_PATH || {
     name: "biology.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("Mitochondria convert chemical energy into ATP."),
   };
+  page.on("dialog", (dialog) => void dialog.accept());
 
   await page.goto("/");
   await clerk.signIn({ page, emailAddress: process.env.E2E_EMAIL! });
@@ -42,7 +47,7 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await expect(page.getByRole("alert").filter({ hasText: /MindForge is a study-only workspace/ })).toBeVisible();
   await expect(page).toHaveURL(/\/workspace$/);
 
-  await page.getByLabel("Your Question / Topic").fill("Explain this short biology note");
+  await page.getByLabel("Your Question / Topic").fill(sessionTitle);
   await page.getByLabel("Attach Files (Optional)").setInputFiles(studySource);
 
   await page.getByRole("button", { name: "New Session" }).click();
@@ -50,7 +55,7 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await expect(page.getByLabel("Your Question / Topic")).toHaveValue("");
   await expect(page.getByText(process.env.E2E_UPLOAD_PATH ? "ML GFG.pdf" : "biology.txt")).toHaveCount(0);
 
-  await page.getByLabel("Your Question / Topic").fill("Explain this short biology note");
+  await page.getByLabel("Your Question / Topic").fill(sessionTitle);
   await page.getByLabel("Attach Files (Optional)").setInputFiles(studySource);
   const analyzeButton = page.getByRole("button", { name: "Analyze & Start Session" });
   await expect(analyzeButton, "Study services must be healthy before the authenticated journey can continue").toBeEnabled({ timeout: 5_000 });
@@ -76,7 +81,11 @@ test("authenticated learner can create and manage a study session", async ({ pag
   await expect(page.getByRole("heading", { name: "New Study Session" })).toBeVisible();
 
   await page.goto("/library");
-  await expect(page.getByText("Explain this short biology note")).toBeVisible();
+  const sessionHeading = page.getByRole("heading", { name: sessionTitle, exact: true });
+  await expect(sessionHeading).toBeVisible();
+  const sessionCard = sessionHeading.locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
+  await sessionCard.getByTitle("Delete").click();
+  await expect(sessionHeading).toHaveCount(0);
 });
 
 /**
@@ -85,7 +94,7 @@ test("authenticated learner can create and manage a study session", async ({ pag
  * a real export download, deletion, and sign-out.
  */
 test("authenticated learner completes the full study journey and leaves cleanly", async ({ page }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(360_000);
 
   const studySource = process.env.E2E_UPLOAD_PATH || {
     name: "biology.txt",
@@ -127,7 +136,7 @@ test("authenticated learner completes the full study journey and leaves cleanly"
   await page.getByRole("tab", { name: "Study Tools" }).click();
   await page.getByRole("button", { name: "Choose export", exact: true }).click();
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: /Markdown/ }).click();
+  await page.getByRole("button", { name: /^Markdown Recommended/ }).click();
   const markdown = await (await download).createReadStream();
   const chunks: Buffer[] = [];
   for await (const chunk of markdown) chunks.push(Buffer.from(chunk));

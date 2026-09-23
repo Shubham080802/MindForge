@@ -7,6 +7,7 @@ import { sessionMessageInput } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { reportServerError } from "@/lib/observability";
 import { buildProfessorPrompt } from "@/lib/professor-prompt";
+import { citedPassages, selectSourcePassages } from "@/lib/source-passages";
 import { enforceStudyScope } from "@/lib/study-scope-server";
 
 export const runtime = "nodejs";
@@ -59,7 +60,8 @@ export async function POST(
     });
 
     // Build context from materials
-    const systemPrompt = buildProfessorPrompt(sessionData.materials, responseLanguage);
+    const passages = selectSourcePassages(sessionData.materials, content);
+    const systemPrompt = buildProfessorPrompt(passages, responseLanguage);
 
     // Get recent conversation history (last 10 messages)
     const recentMessages = await prisma.message.findMany({
@@ -68,16 +70,6 @@ export async function POST(
       take: 10,
     });
 
-    let sources: Array<{ materialId: string; excerpt: string }> = [];
-
-    // Extract sources from materials
-    sources = sessionData.materials
-      .filter((m) => m.extractedText && m.extractedText.length > 0)
-      .slice(0, 3)
-      .map((m) => ({
-        materialId: m.id,
-        excerpt: m.extractedText?.slice(0, 200) || "",
-      }));
     const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
       { role: "system", content: systemPrompt },
       ...recentMessages.slice().reverse().map((message) => ({
@@ -92,7 +84,12 @@ export async function POST(
       max_tokens: 2000,
     };
     const saveAssistant = (assistantContent: string) => prisma.message.create({
-      data: { sessionId, role: "assistant", content: assistantContent, metadata: { sources, language: responseLanguage } },
+      data: {
+        sessionId,
+        role: "assistant",
+        content: assistantContent,
+        metadata: { sources: citedPassages(assistantContent, passages), language: responseLanguage },
+      },
     });
 
     // If streaming requested, return SSE stream

@@ -39,6 +39,7 @@ import {
 } from "@/lib/study-tools";
 import type { PracticeQuestionRecord, PracticeRoundRecord, StudyArtifactRecord } from "@/lib/learning-record";
 import { calculateLearningProgress } from "@/lib/learning-progress";
+import type { PassageReference } from "@/lib/source-passages";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -61,12 +62,17 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  sources?: Array<{ materialId: string; excerpt: string }>;
+  sources?: MessageSource[];
   metadata?: {
-    sources?: Array<{ materialId: string; excerpt: string }>;
+    sources?: MessageSource[];
     language?: StudyLanguageCode;
   };
   createdAt: string;
+}
+
+interface MessageSource extends Partial<PassageReference> {
+  materialId: string;
+  excerpt?: string; // Older messages stored a preview instead of offsets.
 }
 
 interface SessionData {
@@ -131,6 +137,7 @@ export default function SessionPage() {
   const [chatNotice, setChatNotice] = useState<string | null>(null);
   const { language: explanationLanguage, updateLanguage, isLoading: isLoadingLanguage, isSaving: isSavingLanguage, error: languageError } = useStudyLanguage();
   const [selectedMaterial, setSelectedMaterial] = useState<Material | null>(null);
+  const [selectedSource, setSelectedSource] = useState<MessageSource | null>(null);
   const [studyToolResult, setStudyToolResult] = useState<StudyToolResultState | null>(null);
   const [practiceSession, setPracticeSession] = useState<PracticeSession | null>(null);
   const [learningArtifacts, setLearningArtifacts] = useState<StudyArtifactRecord[]>([]);
@@ -143,6 +150,11 @@ export default function SessionPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const speechAudioRef = useRef<HTMLAudioElement | null>(null);
   const speechRequestRef = useRef<AbortController | null>(null);
+
+  const openMaterial = (material: Material, source: MessageSource | null = null) => {
+    setSelectedSource(source);
+    setSelectedMaterial(material);
+  };
 
   useEffect(() => {
     return () => {
@@ -593,7 +605,7 @@ export default function SessionPage() {
                   <MaterialCard
                     key={material.id}
                     material={material}
-                    onClick={() => setSelectedMaterial(material)}
+                    onClick={() => openMaterial(material)}
                   />
                 ))
               )}
@@ -678,6 +690,8 @@ export default function SessionPage() {
                         message={message}
                         onSpeak={speakMessage}
                         speakingId={speakingMessageId}
+                        materials={session.materials}
+                        onOpenSource={openMaterial}
                       />
                     ))}
                     {isLoading && (
@@ -765,7 +779,7 @@ export default function SessionPage() {
                     key={material.id}
                     material={material}
                     detailed
-                    onClick={() => setSelectedMaterial(material)}
+                    onClick={() => openMaterial(material)}
                   />
                 ))}
               </div>
@@ -991,9 +1005,13 @@ export default function SessionPage() {
 
     <PDFViewerDialog
       material={selectedMaterial}
+      source={selectedSource}
       open={!!selectedMaterial}
       onOpenChange={(open) => {
-        if (!open) setSelectedMaterial(null);
+        if (!open) {
+          setSelectedMaterial(null);
+          setSelectedSource(null);
+        }
       }}
     />
     </>
@@ -1001,10 +1019,19 @@ export default function SessionPage() {
   );
 }
 
-function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onSpeak: (id: string, text: string, language: StudyLanguageCode) => void; speakingId: string | null }) {
+function MessageBubble({ message, onSpeak, speakingId, materials, onOpenSource }: {
+  message: Message;
+  onSpeak: (id: string, text: string, language: StudyLanguageCode) => void;
+  speakingId: string | null;
+  materials: Material[];
+  onOpenSource: (material: Material, source: MessageSource) => void;
+}) {
   const isUser = message.role === "user";
   const language = getStudyLanguage(message.metadata?.language || "en");
-  const sources = message.sources || message.metadata?.sources;
+  const sources = (message.sources || message.metadata?.sources || [])
+    .map((source, index) => ({ source, index, material: materials.find((material) => material.id === source.materialId) }))
+    .filter((entry): entry is typeof entry & { material: Material } => Boolean(entry.material));
+  const citedSources = new Map(sources.filter(({ source }) => source.id).map((entry) => [entry.source.id, entry]));
 
   return (
     <div className={cn("flex gap-3", isUser ? "flex-row-reverse" : "")}>
@@ -1036,7 +1063,22 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
               : "bg-muted rounded-tl-none"
           )}
         >
-          <p className="whitespace-pre-wrap">{message.content}</p>
+          <p className="whitespace-pre-wrap">
+            {isUser ? message.content : message.content.split(/(\[S\d+\])/g).map((part, index) => {
+              const cited = citedSources.get(part.slice(1, -1));
+              return cited ? (
+                <button
+                  key={`${index}-${part}`}
+                  type="button"
+                  className="rounded px-1 font-semibold text-primary underline underline-offset-2 hover:bg-primary/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                  aria-label={`Open source ${cited.source.id}: ${cited.material.fileName}`}
+                  onClick={() => onOpenSource(cited.material, cited.source)}
+                >
+                  {part}
+                </button>
+              ) : <span key={`${index}-${part}`}>{part}</span>;
+            })}
+          </p>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
           <span>{formatDistanceToNow(new Date(message.createdAt), { addSuffix: true })}</span>
@@ -1052,12 +1094,21 @@ function MessageBubble({ message, onSpeak, speakingId }: { message: Message; onS
             </Button>
           )}
         </div>
-        {!!sources?.length && (
-          <div className="mt-2 ml-10 flex flex-wrap gap-1">
-            {sources.map((source, i) => (
-              <span key={i} className="text-xs px-2 py-0.5 bg-primary/10 text-primary rounded">
-                Source {i + 1}
-              </span>
+        {!!sources.length && (
+          <div className="mt-2 flex flex-wrap gap-1" aria-label="Referenced study materials">
+            {sources.map(({ source, index, material }) => (
+              <Button
+                key={`${material.id}-${source.id ?? index}`}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="max-w-full gap-1.5"
+                aria-label={`Open ${source.id ? `source ${source.id}` : "attached file"}: ${material.fileName}`}
+                onClick={() => onOpenSource(material, source)}
+              >
+                <FileSearch className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <span className="truncate">{source.id ?? "Attached file"} · {material.fileName}</span>
+              </Button>
             ))}
           </div>
         )}

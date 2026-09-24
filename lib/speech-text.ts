@@ -61,6 +61,7 @@ export function splitSpeechText(
 export function prepareSpeechText(text: string): string {
   return text
     .replaceAll(/\[([^\]]+)]\([^)]+\)/g, "$1")
+    .replaceAll(/\s*\[S\d+]/g, "")
     .replaceAll(/[[(]Material\s+\d+[\])]/gi, "")
     .replaceAll(/^\s*#{1,6}\s+/gm, "")
     .replaceAll(/^\s*[-+*]\s+/gm, "")

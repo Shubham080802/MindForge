@@ -73,4 +73,9 @@ describe("prepareSpeechText", () => {
 
     expect(spoken).toBe("Heading Bold point code");
   });
+
+  it("does not speak source passage IDs", () => {
+    expect(prepareSpeechText("Mitochondria make ATP [S1]. A second fact [S2]."))
+      .toBe("Mitochondria make ATP. A second fact.");
+  });
 });

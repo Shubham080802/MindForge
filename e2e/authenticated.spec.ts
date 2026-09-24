@@ -121,9 +121,18 @@ test("authenticated learner completes the full study journey and leaves cleanly"
   await expect(page).toHaveURL(/\/workspace\/[a-z0-9]+/, { timeout: 60_000 });
 
   // A grounded professor answer is the product's core promise.
-  await page.getByPlaceholder(/Ask Professor MindForge/).fill("Explain how the uploaded material describes energy conversion.");
+  await page.getByPlaceholder(/Ask Professor MindForge/).fill(process.env.E2E_UPLOAD_PATH
+    ? "Explain one specific concept in the uploaded material and cite the supporting passage."
+    : "Explain how the uploaded material describes energy conversion.");
   await page.getByRole("button", { name: "Send message" }).click();
   await expect(page.getByRole("button", { name: "Copy response" }).first()).toBeVisible({ timeout: 120_000 });
+  const citedSource = page.getByRole("button", { name: /Open source S\d+:/ }).first();
+  await expect(citedSource).toBeVisible({ timeout: 30_000 });
+  await citedSource.click();
+  const referencedPassage = page.getByRole("region", { name: "Referenced passage" });
+  await expect(referencedPassage.locator("blockquote")).not.toBeEmpty();
+  if (!process.env.E2E_UPLOAD_PATH) await expect(referencedPassage).toContainText("Mitochondria");
+  await page.keyboard.press("Escape");
 
   // Study tools must generate from the session's own materials.
   await page.getByRole("tab", { name: "Study Tools" }).click();

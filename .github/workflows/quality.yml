@@ -48,6 +48,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm audit:prod
+      - run: pnpm licenses:check
       - run: pnpm db:generate
       - run: pnpm prisma migrate deploy
       - run: pnpm test

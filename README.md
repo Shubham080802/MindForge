@@ -54,3 +54,7 @@ corepack pnpm dev
 ```
 
 See the [deployment and rollback guide](ops/DEPLOYMENT.md) and the [operational readiness evidence](ops/OPERATIONAL_EVIDENCE_2026-09-09.md) for production details.
+
+## License
+
+Released under the [MIT License](LICENSE). Copyright (c) 2026 Shubham Kumar.
